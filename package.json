@@ -13,7 +13,7 @@
     "chokidar": "^4.0.3",
     "clipboardy": "^4.0.0",
     "commander": "^14.0.0",
-    "playwright": "^1.55.0",
+    "playwright": "^1.61.1",
     "ws": "^8.18.3",
     "zod": "^4.1.5"
   },
