@@ -1,10 +1,17 @@
 export type TaskPriority = "low" | "normal" | "high";
 
-export type TaskStep = {
+export type LegacyTaskStep = {
   driver: string;
   action: string;
   payload?: unknown;
 };
+
+export type CapabilityTaskStep = {
+  capability: string;
+  payload?: unknown;
+};
+
+export type TaskStep = LegacyTaskStep | CapabilityTaskStep;
 
 export type Task = {
   id: string;
@@ -33,7 +40,14 @@ export function isTask(value: unknown): value is Task {
 export function isTaskStep(value: unknown): value is TaskStep {
   if (!value || typeof value !== "object") return false;
 
-  const step = value as Partial<TaskStep>;
+  const step = value as Partial<LegacyTaskStep & CapabilityTaskStep>;
+
+  if (
+    typeof step.capability === "string" &&
+    step.capability.trim().length > 0
+  ) {
+    return true;
+  }
 
   return (
     typeof step.driver === "string" &&
