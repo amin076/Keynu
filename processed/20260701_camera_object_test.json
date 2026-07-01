@@ -1,0 +1,69 @@
+{
+  "id": "camera-object-test-001",
+  "createdAt": "2026-07-01T15:00:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "ball01",
+            "name": "Ball",
+            "position": [-5, 1, 0],
+            "scale": [1.4, 1.4, 1.4],
+            "color": "#ff0044"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "goal01",
+            "name": "Goal",
+            "position": [5, 1, 0],
+            "scale": [1.2, 3.0, 1.2],
+            "color": "#00ffff"
+          },
+          {
+            "type": "addText",
+            "id": "title01",
+            "text": "KEYNU CAMERA + OBJECT TEST",
+            "position": [0, 4.8, 0],
+            "scale": [7, 1.4, 1],
+            "color": "#ffffff",
+            "background": "#000044"
+          },
+          {
+            "type": "startRecording",
+            "aspect": "9:16",
+            "seconds": 10,
+            "fps": 60
+          },
+          {
+            "type": "animateObject",
+            "id": "ball01",
+            "position": [5, 1, 0],
+            "duration": 8
+          },
+          {
+            "type": "animateCamera",
+            "position": [8, 5, 10],
+            "target": [0, 1, 0],
+            "duration": 8
+          },
+          {
+            "type": "wait",
+            "seconds": 10
+          },
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "camera-motion-001",
+  "createdAt": "2026-07-01T14:00:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "ball01",
+            "name": "Ball",
+            "position": [0, 1, 0],
+            "scale": [1.5, 1.5, 1.5],
+            "color": "#00ff00"
+          },
+
+          {
+            "type": "startRecording",
+            "seconds": 8,
+            "fps": 60
+          },
+
+          {
+            "type": "animateCamera",
+            "position": [6, 4, 8],
+            "target": [0, 1, 0],
+            "duration": 8
+          },
+
+          {
+            "type": "wait",
+            "seconds": 8
+          },
+
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

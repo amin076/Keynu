@@ -1,0 +1,58 @@
+{
+  "id": "auto-video-002",
+  "createdAt": "2026-07-01T12:10:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "purple_cube_01",
+            "name": "Purple Keynu Cube",
+            "position": [2, 1.5, 0],
+            "scale": [1.3, 3, 1.3],
+            "color": "#8a2be2"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "cyan_sphere_01",
+            "name": "Cyan Keynu Sphere",
+            "position": [-2.5, 1.2, 0],
+            "scale": [2, 2, 2],
+            "color": "#00ffff"
+          },
+          {
+            "type": "addText",
+            "id": "auto_title_02",
+            "text": "KEYNU MADE THIS VIDEO",
+            "position": [0, 4.7, 0],
+            "scale": [7, 1.4, 1],
+            "color": "#ffff00",
+            "background": "#220033"
+          },
+          {
+            "type": "startRecording",
+            "aspect": "9:16",
+            "seconds": 8,
+            "fps": 60
+          },
+          {
+            "type": "wait",
+            "seconds": 8
+          },
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

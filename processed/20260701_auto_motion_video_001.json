@@ -1,0 +1,51 @@
+{
+  "id": "auto-motion-video-001",
+  "createdAt": "2026-07-01T12:45:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "moving_ball_01",
+            "name": "Moving Ball",
+            "position": [-3, 1.4, 0],
+            "scale": [1.4, 1.4, 1.4],
+            "color": "#ff0055"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "goal_cube_01",
+            "name": "Goal Cube",
+            "position": [3, 1.2, 0],
+            "scale": [1.2, 2.4, 1.2],
+            "color": "#00ffaa"
+          },
+          {
+            "type": "addText",
+            "id": "motion_title_01",
+            "text": "KEYNU MOTION TEST",
+            "position": [0, 4.8, 0],
+            "scale": [7, 1.4, 1],
+            "color": "#ffffff",
+            "background": "#220000"
+          },
+          {
+            "type": "recordTimeline",
+            "aspect": "9:16",
+            "seconds": 8,
+            "fps": 60
+          }
+        ]
+      }
+    }
+  ]
+}

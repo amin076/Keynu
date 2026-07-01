@@ -1,0 +1,58 @@
+{
+  "id": "auto-video-001",
+  "createdAt": "2026-07-01T12:00:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "auto_cube_01",
+            "name": "Auto Video Cube",
+            "position": [0, 1.5, 0],
+            "scale": [2, 2, 2],
+            "color": "#0066ff"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "auto_sphere_01",
+            "name": "Auto Video Sphere",
+            "position": [-3, 1, 0],
+            "scale": [1.5, 1.5, 1.5],
+            "color": "#ffcc00"
+          },
+          {
+            "type": "addText",
+            "id": "auto_title_01",
+            "text": "FIRST AUTO VIDEO",
+            "position": [0, 4.5, 0],
+            "scale": [6, 1.4, 1],
+            "color": "#ffffff",
+            "background": "#111111"
+          },
+          {
+            "type": "startRecording",
+            "aspect": "9:16",
+            "seconds": 8,
+            "fps": 60
+          },
+          {
+            "type": "wait",
+            "seconds": 8
+          },
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

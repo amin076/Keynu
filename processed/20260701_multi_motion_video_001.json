@@ -1,0 +1,88 @@
+{
+  "id": "multi-motion-video-001",
+  "createdAt": "2026-07-01T16:00:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "red_ball",
+            "name": "Red Ball",
+            "position": [-5, 1, 0],
+            "scale": [1.2, 1.2, 1.2],
+            "color": "#ff0033"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "cyan_ball",
+            "name": "Cyan Ball",
+            "position": [5, 2.2, 0],
+            "scale": [0.9, 0.9, 0.9],
+            "color": "#00ffff"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "goal_left",
+            "name": "Left Goal",
+            "position": [-6, 1.2, 0],
+            "scale": [0.5, 2.4, 1.2],
+            "color": "#ffff00"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "goal_right",
+            "name": "Right Goal",
+            "position": [6, 1.2, 0],
+            "scale": [0.5, 2.4, 1.2],
+            "color": "#00ff66"
+          },
+          {
+            "type": "addText",
+            "id": "title_multi_motion",
+            "text": "KEYNU AUTO MOTION VIDEO",
+            "position": [0, 5, 0],
+            "scale": [7.5, 1.4, 1],
+            "color": "#ffffff",
+            "background": "#001144"
+          },
+          {
+            "type": "startRecording",
+            "aspect": "9:16",
+            "seconds": 10,
+            "fps": 60
+          },
+          {
+            "type": "animateObject",
+            "id": "red_ball",
+            "position": [5, 1, 0],
+            "duration": 8
+          },
+          {
+            "type": "animateObject",
+            "id": "cyan_ball",
+            "position": [-5, 3.2, 0],
+            "duration": 8
+          },
+          {
+            "type": "wait",
+            "seconds": 10
+          },
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

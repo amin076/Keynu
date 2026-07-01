@@ -1,0 +1,67 @@
+{
+  "id": "auto-video-003",
+  "createdAt": "2026-07-01T12:30:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "orange_tower_01",
+            "name": "Orange Tower",
+            "position": [2.2, 1.8, 0],
+            "scale": [1, 3.6, 1],
+            "color": "#ff6600"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "blue_planet_01",
+            "name": "Blue Planet",
+            "position": [-2.4, 1.6, 0],
+            "scale": [2.2, 2.2, 2.2],
+            "color": "#0088ff"
+          },
+          {
+            "type": "addPrimitive",
+            "primitive": "sphere",
+            "id": "pink_moon_01",
+            "name": "Pink Moon",
+            "position": [0, 3.2, 0],
+            "scale": [0.9, 0.9, 0.9],
+            "color": "#ff44cc"
+          },
+          {
+            "type": "addText",
+            "id": "auto_title_03",
+            "text": "KEYNU AUTO RECORDED THIS",
+            "position": [0, 5.2, 0],
+            "scale": [7.5, 1.4, 1],
+            "color": "#00ffcc",
+            "background": "#001122"
+          },
+          {
+            "type": "startRecording",
+            "aspect": "9:16",
+            "seconds": 8,
+            "fps": 60
+          },
+          {
+            "type": "wait",
+            "seconds": 8
+          },
+          {
+            "type": "stopRecording"
+          }
+        ]
+      }
+    }
+  ]
+}

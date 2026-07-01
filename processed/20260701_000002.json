@@ -1,0 +1,36 @@
+{
+  "id": "task-dehlero-cube-001",
+  "createdAt": "2026-07-01T12:00:00",
+  "priority": "normal",
+  "steps": [
+    {
+      "driver": "dehlero",
+      "action": "sendCommand",
+      "payload": {
+        "dehleroCommand": true,
+        "version": "0.1",
+        "commands": [
+          { "type": "clearAiObjects" },
+          {
+            "type": "addPrimitive",
+            "primitive": "cube",
+            "id": "keynu_cube_01",
+            "name": "Keynu Cube",
+            "position": [0, 1.5, 0],
+            "scale": [2, 2, 2],
+            "color": "#00ff66"
+          },
+          {
+            "type": "addText",
+            "id": "keynu_title_01",
+            "text": "KEYNU CONTROLS DEHLERO",
+            "position": [0, 4.5, 0],
+            "scale": [7, 1.5, 1],
+            "color": "#ffffff",
+            "background": "#000000"
+          }
+        ]
+      }
+    }
+  ]
+}
