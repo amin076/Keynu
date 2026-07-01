@@ -11,14 +11,36 @@ export class CommandQueue {
   async next(): Promise<Task | null> {
     await this.ensureFolders();
 
+    const file = await this.getNextJsonFile();
+
+    if (!file) {
+      return null;
+    }
+
+    const fullPath = path.join(this.inbox, file);
+    const parsed = await this.readTaskFile(fullPath, file);
+
+    if (!parsed) {
+      return null;
+    }
+
+    await this.moveToProcessed(fullPath, file);
+
+    return parsed;
+  }
+
+  private async getNextJsonFile(): Promise<string | null> {
     const files = (await fs.readdir(this.inbox))
       .filter((file) => file.endsWith(".json"))
       .sort();
 
-    if (files.length === 0) return null;
+    return files[0] ?? null;
+  }
 
-    const file = files[0];
-    const fullPath = path.join(this.inbox, file);
+  private async readTaskFile(
+    fullPath: string,
+    file: string,
+  ): Promise<Task | null> {
     const text = await fs.readFile(fullPath, "utf8");
 
     let parsed: unknown;
@@ -37,7 +59,6 @@ export class CommandQueue {
       return null;
     }
 
-    await fs.rename(fullPath, path.join(this.processed, file));
     return parsed;
   }
 
@@ -45,6 +66,10 @@ export class CommandQueue {
     await fs.mkdir(this.inbox, { recursive: true });
     await fs.mkdir(this.processed, { recursive: true });
     await fs.mkdir(this.failed, { recursive: true });
+  }
+
+  private async moveToProcessed(fullPath: string, file: string): Promise<void> {
+    await fs.rename(fullPath, path.join(this.processed, file));
   }
 
   private async moveToFailed(fullPath: string, file: string): Promise<void> {
