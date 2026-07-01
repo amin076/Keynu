@@ -1,4 +1,4 @@
-import { CapabilityRegistry } from "../core/CapabilityRegistry.js";
+﻿import { CapabilityRegistry } from "../core/CapabilityRegistry.js";
 import { CommandBus } from "../core/CommandBus.js";
 import { DriverManager } from "../core/DriverManager.js";
 import { Runtime } from "../core/Runtime.js";
@@ -19,7 +19,7 @@ export async function runStudioTask(task: Task): Promise<void> {
   const runtime = await createStudioAgentRuntime();
   const result = await runtime.execute(task);
 
-  if (result.status === "failed") {
+  if (result.status === "FAILED") {
     throw new Error(result.error ?? "Studio task failed.");
   }
 }

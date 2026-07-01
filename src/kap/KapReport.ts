@@ -1,4 +1,9 @@
-﻿export function createKapSuccessReport(jobId: string): string {
+﻿import type { RuntimeExecutionResult } from "../core/results/RuntimeExecutionResult.js";
+
+export function createKapSuccessReport(
+  jobId: string,
+  result?: RuntimeExecutionResult,
+): string {
   return [
     "```kap",
     JSON.stringify(
@@ -10,7 +15,8 @@
         createdAt: new Date().toISOString(),
         payload: {
           jobId,
-          status: "COMPLETED",
+          status: result?.status ?? "COMPLETED",
+          result,
         },
       },
       null,
@@ -23,6 +29,7 @@
 export function createKapErrorReport(
   jobId: string,
   error: string,
+  result?: RuntimeExecutionResult,
 ): string {
   return [
     "```kap",
@@ -37,6 +44,7 @@ export function createKapErrorReport(
           jobId,
           status: "FAILED",
           error,
+          result,
         },
       },
       null,

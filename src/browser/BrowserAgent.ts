@@ -38,10 +38,10 @@ export class BrowserAgent {
 
       try {
         console.log("[agent] Executing KAP job...");
-        await this.runtime.execute(kap.payload as any);
+        const result = await this.runtime.execute(kap.payload as any);
 
         console.log("[agent] Runtime completed. Sending report...");
-        await conversation.sendMessage(createKapSuccessReport(kap.id));
+        await conversation.sendMessage(createKapSuccessReport(kap.id, result));
 
         await watcher.markReported(messageText);
         console.log("[agent] Report sent.");

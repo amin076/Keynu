@@ -1,4 +1,4 @@
-import { CapabilityRegistry } from "./CapabilityRegistry.js";
+﻿import { CapabilityRegistry } from "./CapabilityRegistry.js";
 import { CommandBus } from "./CommandBus.js";
 import { CommandQueue } from "./CommandQueue.js";
 import { DriverManager } from "./DriverManager.js";
@@ -45,7 +45,7 @@ export class Agent {
 
         const result = await this.runtime.execute(task);
 
-        if (result.status === "completed") {
+        if (result.status === "COMPLETED") {
           console.log(`Task completed: ${result.taskId} (${result.stepsRun} steps)`);
         } else {
           console.error(`Task failed: ${result.taskId}`);
