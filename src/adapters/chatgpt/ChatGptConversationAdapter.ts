@@ -1,16 +1,18 @@
 import type { Page } from "playwright";
 import type { ConversationAdapter } from "../conversation/ConversationAdapter.js";
 import type { ConversationMessage } from "../conversation/ConversationMessage.js";
-import {
-  defaultChatGptConfig,
-  type ChatGptConfig,
-} from "./ChatGptConfig.js";
+import { defaultChatGptConfig, type ChatGptConfig } from "./ChatGptConfig.js";
+import { ChatGptMessageReader } from "./ChatGptMessageReader.js";
 
 export class ChatGptConversationAdapter implements ConversationAdapter {
+  private readonly messageReader: ChatGptMessageReader;
+
   constructor(
     private readonly page: Page,
     private readonly config: ChatGptConfig = defaultChatGptConfig,
-  ) {}
+  ) {
+    this.messageReader = new ChatGptMessageReader(this.page);
+  }
 
   async connect(): Promise<void> {
     await this.page.goto(this.config.conversationUrl, {
@@ -19,7 +21,7 @@ export class ChatGptConversationAdapter implements ConversationAdapter {
   }
 
   async readLatestAssistantMessage(): Promise<ConversationMessage | null> {
-    return null;
+    return this.messageReader.readLatestAssistantMessage();
   }
 
   async waitUntilGenerationFinished(): Promise<void> {
