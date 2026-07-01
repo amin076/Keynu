@@ -1,4 +1,5 @@
 ﻿import { ConversationManager } from "./ConversationManager.js";
+import { ConversationMemory } from "./memory/ConversationMemory.js";
 
 export type ConversationWatcherOptions = {
   pollMs: number;
@@ -11,8 +12,7 @@ export const defaultConversationWatcherOptions: ConversationWatcherOptions = {
 };
 
 export class ConversationWatcher {
-  private lastText = "";
-  private lastSeenText = "";
+  private readonly memory = new ConversationMemory();
 
   constructor(
     private readonly conversation: ConversationManager,
@@ -24,15 +24,29 @@ export class ConversationWatcher {
     while (true) {
       const text = await this.conversation.readLatestAssistantText();
 
-      if (text && text !== this.lastSeenText) {
+      if (text && !(await this.memory.hasSeen(text))) {
         const stableText = await this.waitUntilStable(text);
 
-        this.lastSeenText = stableText;
-        return stableText;
+        if (!(await this.memory.hasSeen(stableText))) {
+          await this.memory.remember(stableText, "READ");
+          return stableText;
+        }
       }
 
       await this.sleep(this.options.pollMs);
     }
+  }
+
+  async markExecuted(text: string): Promise<void> {
+    await this.memory.remember(text, "EXECUTED");
+  }
+
+  async markFailed(text: string): Promise<void> {
+    await this.memory.remember(text, "FAILED");
+  }
+
+  async markReported(text: string): Promise<void> {
+    await this.memory.remember(text, "REPORTED");
   }
 
   private async waitUntilStable(initialText: string): Promise<string> {
@@ -48,7 +62,6 @@ export class ConversationWatcher {
       }
 
       if (Date.now() - stableSince >= this.options.stableMs) {
-        this.lastText = currentText;
         return currentText;
       }
 
