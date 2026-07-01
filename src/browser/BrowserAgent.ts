@@ -13,29 +13,41 @@ export class BrowserAgent {
     const conversation = this.browser.getConversation();
     const watcher = this.browser.getWatcher();
 
+    console.log("[agent] BrowserAgent loop started.");
+
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
+
+      console.log("[agent] Assistant message received. Extracting KAP...");
+
       const kap = extractKapEnvelope(messageText);
 
       if (!kap) {
+        console.log("[agent] No KAP block found. Ignoring message.");
         continue;
       }
 
+      console.log(`[agent] KAP found: ${kap.type} ${kap.id}`);
+
       if (kap.type !== "JOB") {
+        console.log("[agent] KAP is not JOB. Ignoring.");
         continue;
       }
 
       try {
+        console.log("[agent] Executing KAP job...");
         await this.runtime.execute(kap.payload as any);
 
-        await conversation.sendMessage(
-          createKapSuccessReport(kap.id),
-        );
+        console.log("[agent] Runtime completed. Sending report...");
+        await conversation.sendMessage(createKapSuccessReport(kap.id));
 
         await watcher.markReported(messageText);
+        console.log("[agent] Report sent.");
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error);
+
+        console.log(`[agent] Job failed: ${message}`);
 
         await conversation.sendMessage(
           createKapErrorReport(kap.id, message),

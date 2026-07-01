@@ -1,25 +1,41 @@
-﻿import { chromium, type BrowserContext, type Page } from "playwright";
+﻿import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "playwright";
 import type { BrowserConfig } from "./BrowserConfig.js";
 
 export class BrowserSession {
+  private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
 
   constructor(private readonly config: BrowserConfig) {}
 
   async start(): Promise<Page> {
-    this.context = await chromium.launchPersistentContext(
-      this.config.userDataDir,
-      {
-        headless: this.config.headless,
-      },
-    );
+    this.browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
 
-    this.page = this.context.pages()[0] ?? await this.context.newPage();
+    this.context = this.browser.contexts()[0];
 
-    await this.page.goto(this.config.defaultUrl, {
-      waitUntil: "domcontentloaded",
-    });
+    if (!this.context) {
+      throw new Error(
+        "No Chrome context found. Start Chrome with --remote-debugging-port=9222.",
+      );
+    }
+
+    this.page =
+      this.context
+        .pages()
+        .find((page) => page.url().startsWith(this.config.defaultUrl)) ??
+      this.context.pages()[0] ??
+      (await this.context.newPage());
+
+    if (this.config.dedicatedConversationUrl) {
+      await this.page.goto(this.config.dedicatedConversationUrl, {
+        waitUntil: "domcontentloaded",
+      });
+    }
 
     return this.page;
   }
@@ -33,7 +49,8 @@ export class BrowserSession {
   }
 
   async stop(): Promise<void> {
-    await this.context?.close();
+    await this.browser?.close();
+    this.browser = null;
     this.context = null;
     this.page = null;
   }

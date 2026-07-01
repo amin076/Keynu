@@ -13,6 +13,7 @@ export const defaultConversationWatcherOptions: ConversationWatcherOptions = {
 
 export class ConversationWatcher {
   private readonly memory = new ConversationMemory();
+  private baselineText: string | null = null;
 
   constructor(
     private readonly conversation: ConversationManager,
@@ -21,19 +22,36 @@ export class ConversationWatcher {
   ) {}
 
   async waitForNewAssistantMessage(): Promise<string> {
+    await this.ensureBaseline();
+
+    console.log("[watcher] Waiting for NEW assistant message...");
+
     while (true) {
       const text = await this.conversation.readLatestAssistantText();
 
-      if (text && !(await this.memory.hasSeen(text))) {
-        const stableText = await this.waitUntilStable(text);
-
-        if (!(await this.memory.hasSeen(stableText))) {
-          await this.memory.remember(stableText, "READ");
-          return stableText;
-        }
+      if (!text || text === this.baselineText) {
+        await this.sleep(this.options.pollMs);
+        continue;
       }
 
-      await this.sleep(this.options.pollMs);
+      const stableText = await this.waitUntilStable(text);
+
+      if (stableText === this.baselineText) {
+        await this.sleep(this.options.pollMs);
+        continue;
+      }
+
+      if (await this.memory.hasSeen(stableText)) {
+        this.baselineText = stableText;
+        await this.sleep(this.options.pollMs);
+        continue;
+      }
+
+      this.baselineText = stableText;
+      await this.memory.remember(stableText, "READ");
+
+      console.log("[watcher] New stable assistant message detected.");
+      return stableText;
     }
   }
 
@@ -47,6 +65,22 @@ export class ConversationWatcher {
 
   async markReported(text: string): Promise<void> {
     await this.memory.remember(text, "REPORTED");
+  }
+
+  private async ensureBaseline(): Promise<void> {
+    if (this.baselineText !== null) {
+      return;
+    }
+
+    const latest = await this.conversation.readLatestAssistantText();
+
+    this.baselineText = latest ?? "";
+
+    if (latest) {
+      console.log("[watcher] Baseline assistant message stored. Waiting for next message.");
+    } else {
+      console.log("[watcher] No assistant baseline found. Waiting for first assistant message.");
+    }
   }
 
   private async waitUntilStable(initialText: string): Promise<string> {
