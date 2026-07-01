@@ -3,10 +3,15 @@ import type { Driver } from "../../core/Driver.js";
 
 const DEHLERO_API = "http://localhost:5173/api/dehlero";
 
+type DehleroCommand = {
+  action: string;
+  payload?: unknown;
+};
+
 export class DehleroDriver implements Driver {
   readonly id = "dehlero";
 
-  async initialize() {
+  async initialize(): Promise<void> {
     try {
       const res = await axios.get(`${DEHLERO_API}/health`);
       console.log("Dehlero Driver Ready:", res.data.service);
@@ -15,11 +20,8 @@ export class DehleroDriver implements Driver {
     }
   }
 
-  async execute(command: unknown) {
-    const taskCommand = command as {
-      action: string;
-      payload?: unknown;
-    };
+  async execute(command: unknown): Promise<void> {
+    const taskCommand = command as DehleroCommand;
 
     if (taskCommand.action === "sendCommand") {
       await axios.post(`${DEHLERO_API}/command`, taskCommand.payload);

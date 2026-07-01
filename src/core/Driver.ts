@@ -1,9 +1,7 @@
 export interface Driver {
+  readonly id: string;
 
-    readonly id: string;
+  initialize(): Promise<void>;
 
-    initialize(): Promise<void>;
-
-    execute(command: unknown): Promise<void>;
-
+  execute(command: unknown): Promise<void>;
 }

@@ -1,11 +1,11 @@
 import { Agent } from "./core/Agent.js";
 
-async function main() {
-
-    const agent = new Agent();
-
-    await agent.start();
-
+async function main(): Promise<void> {
+  const agent = new Agent();
+  await agent.start();
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -1,12 +1,15 @@
 # Dependencies
 node_modules/
 
-# Build
+# Build output
 dist/
 build/
 coverage/
 
-# Runtime
+# Runtime data
+inbox/
+processed/
+failed/
 runtime-data/
 sessions/
 browser-profile/
