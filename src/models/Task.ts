@@ -33,6 +33,7 @@ export function isTask(value: unknown): value is Task {
       task.priority === "normal" ||
       task.priority === "high") &&
     Array.isArray(task.steps) &&
+    task.steps.length > 0 &&
     task.steps.every(isTaskStep)
   );
 }

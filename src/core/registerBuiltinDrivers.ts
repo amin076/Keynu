@@ -24,17 +24,27 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
     name: "filesystem.writeFile",
     driver: "filesystem",
     action: "writeFile",
+    description: "Write a UTF-8 text file to disk.",
   });
 
   capabilities.register({
     name: "filesystem.readFile",
     driver: "filesystem",
     action: "readFile",
+    description: "Read a UTF-8 text file from disk.",
   });
 
   capabilities.register({
     name: "dehlero.sendCommand",
     driver: "dehlero",
     action: "sendCommand",
+    description: "Send a command payload to the Dehlero runtime API.",
+  });
+
+  capabilities.register({
+    name: "dehlero.ping",
+    driver: "dehlero",
+    action: "ping",
+    description: "Check whether Dehlero runtime API is reachable.",
   });
 }

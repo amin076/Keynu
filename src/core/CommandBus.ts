@@ -22,7 +22,6 @@ export class CommandBus {
 
   async execute(command: AgentCommand): Promise<void> {
     const resolvedCommand = this.resolveCommand(command);
-
     const driver = this.drivers.get(resolvedCommand.driver);
 
     if (!driver) {

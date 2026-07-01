@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Task } from "../models/Task.js";
-import { isTask } from "../models/Task.js";
+import { parseQueueItem } from "../kap/KapParser.js";
 
 export class CommandQueue {
   private readonly inbox = path.resolve("inbox");
@@ -53,13 +53,19 @@ export class CommandQueue {
       return null;
     }
 
-    if (!isTask(parsed)) {
+    const queueItem = parseQueueItem(parsed);
+
+    if (!queueItem) {
       await this.moveToFailed(fullPath, file);
-      console.warn(`Invalid task moved to failed: ${file}`);
+      console.warn(`Invalid task or KAP job moved to failed: ${file}`);
       return null;
     }
 
-    return parsed;
+    if (queueItem.source === "kap") {
+      console.log(`KAP job accepted: ${queueItem.task.id}`);
+    }
+
+    return queueItem.task;
   }
 
   private async ensureFolders(): Promise<void> {

@@ -1,13 +1,30 @@
 export interface Capability {
-  name: string;
-  driver: string;
-  action: string;
+  readonly name: string;
+  readonly driver: string;
+  readonly action: string;
+  readonly description?: string;
 }
 
 export class CapabilityRegistry {
   private readonly capabilities = new Map<string, Capability>();
 
   register(capability: Capability): void {
+    if (!capability.name.trim()) {
+      throw new Error("Capability name must be a non-empty string.");
+    }
+
+    if (!capability.driver.trim()) {
+      throw new Error(`Capability '${capability.name}' driver must be a non-empty string.`);
+    }
+
+    if (!capability.action.trim()) {
+      throw new Error(`Capability '${capability.name}' action must be a non-empty string.`);
+    }
+
+    if (this.capabilities.has(capability.name)) {
+      throw new Error(`Capability '${capability.name}' is already registered.`);
+    }
+
     this.capabilities.set(capability.name, capability);
   }
 
@@ -20,7 +37,9 @@ export class CapabilityRegistry {
   }
 
   getAll(): Capability[] {
-    return [...this.capabilities.values()];
+    return [...this.capabilities.values()].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   }
 
   clear(): void {

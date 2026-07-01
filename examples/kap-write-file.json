@@ -1,0 +1,17 @@
+{
+  "kap": "1.0",
+  "type": "JOB",
+  "id": "kap-write-test-001",
+  "priority": "normal",
+  "workflow": {
+    "steps": [
+      {
+        "capability": "filesystem.writeFile",
+        "payload": {
+          "path": "runtime-data/hello.txt",
+          "content": "Hello from KAP"
+        }
+      }
+    ]
+  }
+}

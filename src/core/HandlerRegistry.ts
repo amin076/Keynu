@@ -4,6 +4,14 @@ export class HandlerRegistry {
   private readonly handlers = new Map<string, Handler>();
 
   register(capability: string, handler: Handler): void {
+    if (!capability.trim()) {
+      throw new Error("Handler capability must be a non-empty string.");
+    }
+
+    if (this.handlers.has(capability)) {
+      throw new Error(`Handler for capability '${capability}' is already registered.`);
+    }
+
     this.handlers.set(capability, handler);
   }
 
@@ -24,6 +32,6 @@ export class HandlerRegistry {
   }
 
   getAll(): string[] {
-    return [...this.handlers.keys()];
+    return [...this.handlers.keys()].sort();
   }
 }

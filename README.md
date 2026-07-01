@@ -1,19 +1,46 @@
 # Keynu
 
-Keynu is an AI runtime layer for executing structured agent tasks through drivers.
+Keynu is an AI Runtime that executes provider-neutral jobs and routes them to drivers such as Dehlero.
+
+## Current status
+
+This refactor keeps the existing JSON task format working and adds the first KAP/capability foundation.
 
 ## Commands
 
-```bash
+```powershell
 npm install
 npm run build
 npm run dev
 ```
 
-## Runtime folders
+## Queue input
 
-- `inbox/`: incoming JSON task files
-- `processed/`: successfully parsed tasks
-- `failed/`: invalid tasks
+Put `.json` files in `inbox/`.
 
-These runtime folders are ignored by Git.
+Supported formats:
+
+- Legacy task JSON using `driver` + `action`
+- KAP v1 job envelope using `capability`
+
+## Example KAP job
+
+```json
+{
+  "kap": "1.0",
+  "type": "JOB",
+  "id": "kap-write-test-001",
+  "priority": "normal",
+  "workflow": {
+    "steps": [
+      {
+        "capability": "filesystem.writeFile",
+        "payload": {
+          "path": "runtime-data/hello.txt",
+          "content": "Hello from KAP"
+        }
+      }
+    ]
+  }
+}
+```
