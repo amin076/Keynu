@@ -1,3 +1,4 @@
+import { CapabilityRegistry } from "./CapabilityRegistry.js";
 import { CommandBus } from "./CommandBus.js";
 import { CommandQueue } from "./CommandQueue.js";
 import { DriverManager } from "./DriverManager.js";
@@ -6,18 +7,26 @@ import { registerBuiltinDrivers } from "./registerBuiltinDrivers.js";
 
 export class Agent {
   private readonly driverManager = new DriverManager();
-  private readonly commandBus = new CommandBus(this.driverManager);
+
+  private readonly capabilityRegistry = new CapabilityRegistry();
+
+  private readonly commandBus = new CommandBus(
+    this.driverManager,
+    this.capabilityRegistry,
+  );
+
   private readonly queue = new CommandQueue();
+
   private readonly runtime = new Runtime(this.commandBus);
 
-  async start(): Promise<void> {
+  async start() {
     console.log("");
     console.log("======================");
     console.log("Keynu");
     console.log("======================");
     console.log("");
 
-    await registerBuiltinDrivers(this.driverManager);
+    await registerBuiltinDrivers(this.driverManager, this.capabilityRegistry);
 
     console.log("Watching inbox...");
     console.log("");
@@ -33,11 +42,9 @@ export class Agent {
         await this.runtime.execute(task);
       }
 
-      await sleep(500);
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+
