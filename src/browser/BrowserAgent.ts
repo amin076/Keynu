@@ -24,13 +24,15 @@ export class BrowserAgent {
 
       if (!kap) {
         console.log("[agent] No KAP block found. Ignoring message.");
+        await watcher.markFailed(messageText);
         continue;
       }
 
       console.log(`[agent] KAP found: ${kap.type} ${kap.id}`);
 
       if (kap.type !== "JOB") {
-        console.log("[agent] KAP is not JOB. Ignoring.");
+        console.log("[agent] KAP is not JOB. Marking as reported/read.");
+        await watcher.markReported(messageText);
         continue;
       }
 
