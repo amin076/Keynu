@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+﻿import { chromium, type BrowserContext, type Page } from "playwright";
 import type { BrowserConfig } from "./BrowserConfig.js";
 
 export class BrowserSession {

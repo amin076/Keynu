@@ -1,7 +1,8 @@
-export type BrowserConfig = {
+﻿export type BrowserConfig = {
   headless: boolean;
   userDataDir: string;
   defaultUrl: string;
+  dedicatedConversationUrl?: string;
 };
 
 export const defaultBrowserConfig: BrowserConfig = {
