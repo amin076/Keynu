@@ -36,27 +36,27 @@ export class BrowserAgent {
         continue;
       }
 
-      try {
-        console.log("[agent] Executing KAP job...");
-        const result = await this.runtime.execute(kap.payload as any);
+      const result = await this.runtime.execute(kap.payload as any);
 
-        console.log("[agent] Runtime completed. Sending report...");
+      if (result.status === "COMPLETED") {
+        console.log("[agent] Runtime completed. Sending success report...");
         await conversation.sendMessage(createKapSuccessReport(kap.id, result));
-
         await watcher.markReported(messageText);
-        console.log("[agent] Report sent.");
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-
-        console.log(`[agent] Job failed: ${message}`);
-
-        await conversation.sendMessage(
-          createKapErrorReport(kap.id, message),
-        );
-
-        await watcher.markFailed(messageText);
+        console.log("[agent] Success report sent.");
+        continue;
       }
+
+      console.log("[agent] Runtime failed. Sending error report...");
+      await conversation.sendMessage(
+        createKapErrorReport(
+          kap.id,
+          result.error ?? "Runtime execution failed.",
+          result,
+        ),
+      );
+
+      await watcher.markFailed(messageText);
+      console.log("[agent] Error report sent.");
     }
   }
 }
