@@ -1,46 +1,40 @@
-# Keynu
+# Keynu YouTube Driver v0.4
 
-Keynu is an AI Runtime that executes provider-neutral jobs and routes them to drivers such as Dehlero.
+Adds local OAuth login and `config/youtube.json` credential storage.
 
-## Current status
-
-This refactor keeps the existing JSON task format working and adds the first KAP/capability foundation.
-
-## Commands
+## Install
 
 ```powershell
-npm install
+npm install googleapis
+npm uninstall google-auth-library
 npm run build
-npm run dev
 ```
 
-## Queue input
+## Setup config
 
-Put `.json` files in `inbox/`.
+Copy:
 
-Supported formats:
-
-- Legacy task JSON using `driver` + `action`
-- KAP v1 job envelope using `capability`
-
-## Example KAP job
-
-```json
-{
-  "kap": "1.0",
-  "type": "JOB",
-  "id": "kap-write-test-001",
-  "priority": "normal",
-  "workflow": {
-    "steps": [
-      {
-        "capability": "filesystem.writeFile",
-        "payload": {
-          "path": "runtime-data/hello.txt",
-          "content": "Hello from KAP"
-        }
-      }
-    ]
-  }
-}
+```powershell
+copy config\youtube.example.json config\youtube.json
 ```
+
+Edit `config/youtube.json` and paste your Google OAuth Desktop app `clientId` and `clientSecret`.
+
+## Login
+
+```powershell
+npm run build
+node dist/drivers/youtube/cli.js auth-login
+```
+
+Browser opens. Approve YouTube access. The driver saves `refreshToken` into `config/youtube.json`.
+
+## Upload
+
+Edit `examples/youtube/upload-job.example.json`, then run:
+
+```powershell
+node dist/drivers/youtube/cli.js upload examples/youtube/upload-job.example.json youtube-report.json
+```
+
+Default privacy is `private` for safety. Change job privacy to `public` only when you are ready.

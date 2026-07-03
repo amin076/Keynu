@@ -32,9 +32,23 @@ export class ConversationManager {
       return null;
     }
 
-    const text = (await messages.nth(count - 1).innerText()).trim();
+    for (let index = count - 1; index >= 0; index -= 1) {
+      try {
+        const text = (
+          await messages.nth(index).innerText({
+            timeout: 2000,
+          })
+        ).trim();
 
-    return text.length > 0 ? text : null;
+        if (text.length > 0) {
+          return text;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
   }
 
   async sendMessage(message: string): Promise<void> {

@@ -1,0 +1,29 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "COMMAND",
+  "id": "youtube-upload-titan-001",
+  "payload": {
+    "action": "UPLOAD_YOUTUBE",
+    "configPath": "config/youtube.json",
+    "videoPath": "D:/Videos/titan-short.mp4",
+    "thumbnailPath": "D:/Videos/titan-thumb.png",
+    "title": "Titan World Cup 3026 | Saturn Sky Football",
+    "description": "A cinematic science simulation of a future football match on Titan under Saturn.\n\nMade with Keynu and Dehlero.",
+    "tags": [
+      "Titan",
+      "Saturn",
+      "space football",
+      "science simulation",
+      "future sports",
+      "Dehlero",
+      "Keynu"
+    ],
+    "categoryId": "28",
+    "privacy": "private",
+    "madeForKids": false,
+    "notifySubscribers": false,
+    "defaultLanguage": "en",
+    "defaultAudioLanguage": "en"
+  }
+}

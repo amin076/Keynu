@@ -49,3 +49,6 @@ pnpm-debug.log*
 
 chrome-profile/
 runtime-data/
+
+config/youtube.json
+youtube-report.json

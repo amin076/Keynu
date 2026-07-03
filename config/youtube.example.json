@@ -1,0 +1,8 @@
+{
+  "clientId": "PASTE_CLIENT_ID_HERE",
+  "clientSecret": "PASTE_CLIENT_SECRET_HERE",
+  "redirectUri": "http://127.0.0.1:53682/oauth2callback",
+  "defaultCategoryId": "28",
+  "defaultPrivacyStatus": "private",
+  "defaultMadeForKids": false
+}
