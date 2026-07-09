@@ -1,0 +1,40 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-codex-hybrid-agent-001",
+  "createdAt": "2026-07-08T00:00:00.000Z",
+  "payload": {
+    "target": "codex",
+    "projectName": "Keynu",
+    "repo": "amin076/Keynu",
+    "localPath": "C:\\Physics\\Keynu",
+    "task": {
+      "title": "Improve Keynu Codex Connector v0.2",
+      "instructions": "Inspect the existing Codex connector and improve it as an AI-agent bridge. Keep KAP as the outer routing and report-tracking envelope, but make the prompt sent to Codex natural English. Explain that Codex is an AI coding agent, not a deterministic app driver. Preserve the v0.1 manual prepare flow and do not add a live Codex API connection.",
+      "context": "Keynu already has a ChatGPT browser-agent flow where ChatGPT sends KAP, BrowserAgent extracts it, Keynu executes the job, and Keynu sends a KAP report back. The Codex bridge should fit into ChatGPT -> Keynu -> Codex -> Keynu -> ChatGPT.",
+      "constraints": [
+        "Keep the existing prepare command working.",
+        "Write generated prompts to .keynu/codex/prompts/<jobId>.md.",
+        "Write pending reports to .keynu/codex/reports/<jobId>.pending.json.",
+        "Use natural English for the task instructions sent to Codex.",
+        "Use KAP only for routing, tracking, and reports."
+      ],
+      "avoidChanging": [
+        "src/drivers/dehlero/**",
+        "src/drivers/youtube/**",
+        "src/drivers/blender/**",
+        "src/drivers/esbiko/**"
+      ]
+    },
+    "avoidFiles": [
+      "docs/YOUTUBE_DRIVER_NEXT.md",
+      "docs/YOUTUBE_AUTH_LOGIN.md"
+    ],
+    "context": {
+      "bridge": "manual-filesystem",
+      "version": "0.2",
+      "route": "ChatGPT -> Keynu -> Codex -> Keynu -> ChatGPT"
+    }
+  }
+}

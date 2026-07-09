@@ -11,6 +11,7 @@ runtime-data/
 sessions/
 browser-profile/
 playwright-cache/
+chrome-profile/
 downloads/
 uploads/
 screenshots/
@@ -19,12 +20,18 @@ logs/
 temp/
 tmp/
 .cache/
+.keynu/
 
 # Environment
 .env
 .env.*
 !.env.example
 !.env.sample
+
+# Secrets / local configs
+config/youtube.json
+config/youtube-*.json
+youtube-report.json
 
 # IDE
 .vscode/

@@ -1,0 +1,17 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-safety-block-test-001",
+  "createdAt": "2026-07-08T11:30:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "commands": [
+      {
+        "command": "Remove-Item",
+        "args": ["some-file.txt", "-Force"]
+      }
+    ]
+  }
+}

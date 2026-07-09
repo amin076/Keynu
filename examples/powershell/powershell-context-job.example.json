@@ -1,0 +1,12 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-context-generic-001",
+  "payload": {
+    "cwd": "C:\\Physics\\Keynu",
+    "outputPath": "C:\\Physics\\Keynu\\.keynu\\powershell\\reports\\job-powershell-context-generic-001.context.report.json",
+    "maxFiles": 200,
+    "includeBuild": false
+  }
+}

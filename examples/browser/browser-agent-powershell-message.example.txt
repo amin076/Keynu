@@ -1,0 +1,28 @@
+Please run this Keynu job:
+
+```kap
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-browser-powershell-v10-001",
+  "createdAt": "2026-07-08T11:20:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "readFiles": [
+      "package.json"
+    ],
+    "writeFiles": [
+      {
+        "path": ".keynu/powershell/test-output/browser-runtime-v10.txt",
+        "content": "Hello from BrowserAgent Runtime Bridge v1.0"
+      }
+    ],
+    "buildCommand": {
+      "command": "npm",
+      "args": ["run", "build"]
+    }
+  }
+}
+```

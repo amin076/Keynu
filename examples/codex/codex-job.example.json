@@ -1,0 +1,28 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-codex-keynu-connector-001",
+  "createdAt": "2026-07-08T00:00:00.000Z",
+  "payload": {
+    "target": "codex",
+    "repo": "amin076/Keynu",
+    "localPath": "C:\\Physics\\Keynu",
+    "task": {
+      "title": "Create Keynu Codex Driver v0.1",
+      "instructions": [
+        "Inspect the current Keynu architecture.",
+        "Understand how Keynu connects with ChatGPT.",
+        "Follow the same style and conventions.",
+        "Create a Codex driver under src/drivers/codex.",
+        "Add a CLI prepare command.",
+        "Generate a Codex-ready prompt from a KAP job.",
+        "Generate a pending KAP report.",
+        "Add example job JSON.",
+        "Add documentation.",
+        "Do not modify unrelated drivers.",
+        "Do not work on Dehlero, Esbiko, Blender, or YouTube."
+      ]
+    }
+  }
+}
