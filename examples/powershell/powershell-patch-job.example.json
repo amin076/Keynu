@@ -1,0 +1,31 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-patch-generic-001",
+  "createdAt": "2026-07-08T00:00:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "readFiles": [
+      "package.json",
+      "tsconfig.json"
+    ],
+    "writeFiles": [
+      {
+        "path": ".keynu/powershell/test-output/hello-from-patch.txt",
+        "content": "Hello from Keynu PowerShell Patch v0.6\n",
+        "backup": false
+      }
+    ],
+    "commands": [
+      {
+        "command": "git",
+        "args": ["status", "--short"],
+        "allowFailure": true
+      }
+    ],
+    "runBuild": true,
+    "collectGit": true
+  }
+}

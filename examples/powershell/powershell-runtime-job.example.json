@@ -1,0 +1,26 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-runtime-generic-001",
+  "createdAt": "2026-07-08T00:00:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "readFiles": [
+      { "path": "package.json" },
+      { "path": "tsconfig.json" }
+    ],
+    "writeFiles": [
+      {
+        "path": ".keynu/powershell/test-output/hello-from-runtime.txt",
+        "content": "Hello from Keynu PowerShell Runtime v0.5\n",
+        "overwrite": true
+      }
+    ],
+    "commands": [
+      { "command": "npm", "args": ["run", "build"], "timeoutMs": 120000 }
+    ],
+    "includeGit": true
+  }
+}

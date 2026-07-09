@@ -1,31 +1,28 @@
-import { Driver } from "./Driver.js";
+import type { Driver } from "./Driver.js";
 
 export class DriverManager {
+  private readonly drivers = new Map<string, Driver>();
 
-    private readonly drivers = new Map<string, Driver>();
-
-    register(driver: Driver) {
-
-        this.drivers.set(driver.id, driver);
-
-        console.log(`Driver registered: ${driver.id}`);
-
+  register(driver: Driver): void {
+    if (this.drivers.has(driver.id)) {
+      throw new Error(`Driver '${driver.id}' is already registered.`);
     }
 
-    async initialize() {
+    this.drivers.set(driver.id, driver);
+    console.log(`Driver registered: ${driver.id}`);
+  }
 
-        for (const driver of this.drivers.values()) {
-
-            await driver.initialize();
-
-        }
-
+  async initialize(): Promise<void> {
+    for (const driver of this.drivers.values()) {
+      await driver.initialize();
     }
+  }
 
-    get(id: string) {
+  get(id: string): Driver | undefined {
+    return this.drivers.get(id);
+  }
 
-        return this.drivers.get(id);
-
-    }
-
+  list(): string[] {
+    return [...this.drivers.keys()].sort();
+  }
 }

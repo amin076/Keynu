@@ -1,0 +1,28 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-patch-build-generic-001",
+  "createdAt": "2026-07-08T00:00:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "outputPath": ".keynu/powershell/reports/job-powershell-patch-build-generic-001.patch.report.json",
+    "createBackups": true,
+    "readFiles": [
+      "package.json",
+      "tsconfig.json"
+    ],
+    "writeFiles": [
+      {
+        "path": ".keynu/powershell/test-output/hello-from-patch-build-v07.txt",
+        "content": "Hello from Keynu PowerShell Patch Build v0.7\n"
+      }
+    ],
+    "buildCommand": {
+      "command": "npm",
+      "args": ["run", "build"],
+      "timeoutMs": 180000
+    }
+  }
+}

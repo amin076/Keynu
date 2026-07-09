@@ -1,0 +1,24 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "JOB",
+  "id": "job-powershell-router-generic-001",
+  "createdAt": "2026-07-08T11:10:00.000Z",
+  "payload": {
+    "target": "powershell",
+    "cwd": "C:\\Physics\\Keynu",
+    "readFiles": [
+      "package.json"
+    ],
+    "writeFiles": [
+      {
+        "path": ".keynu/powershell/test-output/router-v09.txt",
+        "content": "Hello from Keynu Runtime Router v0.9"
+      }
+    ],
+    "buildCommand": {
+      "command": "npm",
+      "args": ["run", "build"]
+    }
+  }
+}

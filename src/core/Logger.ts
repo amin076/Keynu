@@ -1,9 +1,13 @@
 export class Logger {
+  log(message: string): void {
+    console.log(message);
+  }
 
-    log(message: string) {
+  warn(message: string): void {
+    console.warn(message);
+  }
 
-        console.log(message);
-
-    }
-
+  error(message: string): void {
+    console.error(message);
+  }
 }
