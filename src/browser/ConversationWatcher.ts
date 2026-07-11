@@ -1,5 +1,8 @@
-﻿import { ConversationManager } from "./ConversationManager.js";
+import { ConversationManager } from "./ConversationManager.js";
+import type { AssistantMessageSnapshot } from "./AssistantMessageSnapshot.js";
 import { ConversationMemory } from "./memory/ConversationMemory.js";
+import { browserEventBus } from "./BrowserEventBus.js";
+import { BrowserEvents } from "./BrowserEvents.js";
 
 export type ConversationWatcherOptions = {
   pollMs: number;
@@ -13,45 +16,39 @@ export const defaultConversationWatcherOptions: ConversationWatcherOptions = {
 
 export class ConversationWatcher {
   private readonly memory = new ConversationMemory();
-  private baselineText: string | null = null;
+  private baselineMessage: AssistantMessageSnapshot | null = null;
 
   constructor(
     private readonly conversation: ConversationManager,
-    private readonly options: ConversationWatcherOptions =
-      defaultConversationWatcherOptions,
+    private readonly options: ConversationWatcherOptions = defaultConversationWatcherOptions,
   ) {}
 
   async waitForNewAssistantMessage(): Promise<string> {
     await this.ensureBaseline();
-
     console.log("[watcher] Waiting for NEW assistant message...");
 
     while (true) {
-      const text = await this.conversation.readLatestAssistantText();
+      const stableMessage = await this.conversation.waitForStableAssistantMessage(
+        this.baselineMessage?.id ?? null,
+        this.options.stableMs,
+      );
 
-      if (!text || text === this.baselineText) {
+      if (stableMessage.id === this.baselineMessage?.id) {
         await this.sleep(this.options.pollMs);
         continue;
       }
 
-      const stableText = await this.waitUntilStable(text);
+      this.baselineMessage = stableMessage;
 
-      if (stableText === this.baselineText) {
+      if (await this.memory.hasSeen(stableMessage.text)) {
         await this.sleep(this.options.pollMs);
         continue;
       }
 
-      if (await this.memory.hasSeen(stableText)) {
-        this.baselineText = stableText;
-        await this.sleep(this.options.pollMs);
-        continue;
-      }
-
-      this.baselineText = stableText;
-      await this.memory.remember(stableText, "READ");
-
-      console.log("[watcher] New stable assistant message detected.");
-      return stableText;
+      await this.memory.remember(stableMessage.text, "READ");
+      await browserEventBus.emit(BrowserEvents.MESSAGE_DETECTED,{message:stableMessage,occurredAt:new Date().toISOString()});
+      console.log(`[watcher] New assistant message detected: ${stableMessage.id}`);
+      return stableMessage.text;
     }
   }
 
@@ -68,39 +65,15 @@ export class ConversationWatcher {
   }
 
   private async ensureBaseline(): Promise<void> {
-    if (this.baselineText !== null) {
-      return;
-    }
+    if (this.baselineMessage !== null) return;
 
-    const latest = await this.conversation.readLatestAssistantText();
+    this.baselineMessage = await this.conversation.readLatestAssistantMessage();
 
-    this.baselineText = latest ?? "";
-
-    if (latest) {
-      console.log("[watcher] Baseline assistant message stored. Waiting for next message.");
-    } else {
-      console.log("[watcher] No assistant baseline found. Waiting for first assistant message.");
-    }
-  }
-
-  private async waitUntilStable(initialText: string): Promise<string> {
-    let currentText = initialText;
-    let stableSince = Date.now();
-
-    while (true) {
-      const latest = await this.conversation.readLatestAssistantText();
-
-      if (latest && latest !== currentText) {
-        currentText = latest;
-        stableSince = Date.now();
-      }
-
-      if (Date.now() - stableSince >= this.options.stableMs) {
-        return currentText;
-      }
-
-      await this.sleep(this.options.pollMs);
-    }
+    console.log(
+      this.baselineMessage
+        ? `[watcher] Baseline stored: ${this.baselineMessage.id}`
+        : "[watcher] No assistant baseline found. Waiting for first assistant message.",
+    );
   }
 
   private async sleep(ms: number): Promise<void> {

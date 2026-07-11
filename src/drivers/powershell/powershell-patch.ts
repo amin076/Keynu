@@ -70,7 +70,18 @@ async function runCommand(commandSpec: PowerShellCommandSpec, cwd: string, allow
     };
   }
 
-  const safeCommand = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;
+  const loweredCommand = command.toLowerCase();
+  const safeCommand =
+    process.platform === "win32" && loweredCommand === "npm"
+      ? "npm.cmd"
+      : process.platform === "win32" && loweredCommand === "npx"
+        ? "npx.cmd"
+        : command;
+
+  const requiresShell =
+    process.platform === "win32" &&
+    (safeCommand.toLowerCase().endsWith(".cmd") ||
+      safeCommand.toLowerCase().endsWith(".bat"));
 
   try {
     const result = await execFileAsync(safeCommand, args, {
@@ -78,7 +89,7 @@ async function runCommand(commandSpec: PowerShellCommandSpec, cwd: string, allow
       windowsHide: true,
       timeout: 120000,
       maxBuffer: 1024 * 1024 * 20,
-      shell: process.platform === "win32",
+      shell: requiresShell,
     });
 
     return {

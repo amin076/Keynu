@@ -1,0 +1,1 @@
+# KAOS Workspace Engine\n\nThe Workspace Engine is responsible for managing multiple repositories simultaneously.\n\nFeatures:\n- Workspace isolation\n- Independent memory\n- Driver binding\n- Session isolation\n- Repository abstraction\n- Foundation for multi-project AI orchestration\n

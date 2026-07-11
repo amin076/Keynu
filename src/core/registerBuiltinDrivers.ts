@@ -1,5 +1,6 @@
 import { CapabilityRegistry } from "./CapabilityRegistry.js";
 import { DriverManager } from "./DriverManager.js";
+import { BlenderDriver } from "../drivers/blender/BlenderDriver.js";
 import { DehleroDriver } from "../drivers/dehlero/DehleroDriver.js";
 import { FileSystemDriver } from "../drivers/filesystem/FileSystemDriver.js";
 
@@ -9,6 +10,7 @@ export async function registerBuiltinDrivers(
 ): Promise<void> {
   manager.register(new FileSystemDriver());
   manager.register(new DehleroDriver());
+  manager.register(new BlenderDriver());
 
   registerBuiltinCapabilities(capabilities);
 
@@ -35,6 +37,13 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
   });
 
   capabilities.register({
+    name: "dehlero.ping",
+    driver: "dehlero",
+    action: "ping",
+    description: "Check whether Dehlero runtime API is reachable.",
+  });
+
+  capabilities.register({
     name: "dehlero.sendCommand",
     driver: "dehlero",
     action: "sendCommand",
@@ -42,9 +51,9 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
   });
 
   capabilities.register({
-    name: "dehlero.ping",
-    driver: "dehlero",
-    action: "ping",
-    description: "Check whether Dehlero runtime API is reachable.",
+    name: "blender.status",
+    driver: "blender",
+    action: "status",
+    description: "Detect Blender executable and report Blender driver status.",
   });
 }

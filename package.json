@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "browser-agent": "node dist/browser/runBrowserAgent.js",
+    "browser": "node dist/browser/runBrowserAgent.js",
+    "dashboard:status": "curl http://127.0.0.1:4777/api/status",
+    "dashboard:health": "curl http://127.0.0.1:4777/health",
+    "chrome:keynu": "powershell -ExecutionPolicy Bypass -File scripts/start-keynu-chrome.ps1",
+    "connect:chatgpt": "powershell -ExecutionPolicy Bypass -File scripts/connect-chatgpt.ps1"
   },
   "dependencies": {
     "axios": "^1.11.0",

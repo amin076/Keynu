@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { Driver } from "../../core/Driver.js";
+import type { Driver, DriverResult } from "../../core/Driver.js";
 import { createCodexPrompt, createPendingCodexReport } from "./codex.jobMapper.js";
 import {
   createCompletedCodexReport,
@@ -37,7 +37,7 @@ export class CodexDriver implements Driver {
     console.log("Codex Driver Ready (manual bridge v0.1)");
   }
 
-  async execute(command: unknown): Promise<void> {
+  async execute(command: unknown): Promise<DriverResult> {
     const codexCommand = command as CodexCommand;
 
     if (codexCommand.action === "prepare") {
@@ -45,12 +45,12 @@ export class CodexDriver implements Driver {
 
       if (payload?.jobPath) {
         await this.prepareJobFile(payload.jobPath, { outputRoot: payload.outputRoot });
-        return;
+        return { success: true, message: "Codex command completed." };
       }
 
       if (payload?.job) {
         await this.prepareJob(payload.job, { outputRoot: payload.outputRoot });
-        return;
+        return { success: true, message: "Codex command completed." };
       }
 
       throw new Error("Codex prepare requires payload.jobPath or payload.job.");
@@ -64,7 +64,7 @@ export class CodexDriver implements Driver {
       }
 
       parseCodexResult(payload.resultText);
-      return;
+      return { success: true, message: "Codex command completed." };
     }
 
     throw new Error(`Unknown Codex action: ${String(codexCommand.action)}`);
@@ -123,3 +123,5 @@ export class CodexDriver implements Driver {
 function toSafeFileId(jobId: string): string {
   return jobId.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
+
+
