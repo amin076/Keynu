@@ -16,7 +16,6 @@ export type ProcessManagerPayload = {
 
 export async function handleProcessManagerPayload(payload: ProcessManagerPayload) {
   const action = payload.processAction;
-
   if (!action) return null;
 
   if (action === "start") {
@@ -38,7 +37,7 @@ export async function handleProcessManagerPayload(payload: ProcessManagerPayload
   if (action === "list") {
     return {
       processAction: action,
-      processes: manager.list(),
+      processes: manager.list(payload.cwd),
     };
   }
 
@@ -46,7 +45,7 @@ export async function handleProcessManagerPayload(payload: ProcessManagerPayload
     if (!payload.processId) throw new Error("processId is required for processAction=stop");
     return {
       processAction: action,
-      record: manager.stop(payload.processId),
+      record: manager.stop(payload.processId, payload.cwd),
     };
   }
 
@@ -55,7 +54,7 @@ export async function handleProcessManagerPayload(payload: ProcessManagerPayload
     return {
       processAction: action,
       processId: payload.processId,
-      logs: manager.readLog(payload.processId, payload.maxChars ?? 4000),
+      logs: manager.readLog(payload.processId, payload.maxChars ?? 4000, payload.cwd),
     };
   }
 

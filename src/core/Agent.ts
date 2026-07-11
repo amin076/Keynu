@@ -1,4 +1,5 @@
-﻿import { CapabilityRegistry } from "./CapabilityRegistry.js";
+import { startDashboardServer } from "../app/dashboardServer.js";
+import { CapabilityRegistry } from "./CapabilityRegistry.js";
 import { CommandBus } from "./CommandBus.js";
 import { CommandQueue } from "./CommandQueue.js";
 import { DriverManager } from "./DriverManager.js";
@@ -26,8 +27,15 @@ export class Agent {
 
     await registerBuiltinDrivers(this.driverManager, this.capabilityRegistry);
 
+    const capabilities = this.capabilityRegistry.getAll();
+
+    await startDashboardServer({
+      driverManager: this.driverManager,
+      capabilities,
+    });
+
     console.log("Capabilities:");
-    for (const capability of this.capabilityRegistry.getAll()) {
+    for (const capability of capabilities) {
       console.log(`- ${capability.name} -> ${capability.driver}.${capability.action}`);
     }
 

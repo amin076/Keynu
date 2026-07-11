@@ -20,7 +20,7 @@ export class CommandBus {
     private readonly capabilities?: CapabilityRegistry,
   ) {}
 
-  async execute(command: AgentCommand): Promise<void> {
+  async execute(command: AgentCommand): Promise<import("./Driver.js").DriverResult> {
     const resolvedCommand = this.resolveCommand(command);
     const driver = this.drivers.get(resolvedCommand.driver);
 
@@ -28,7 +28,7 @@ export class CommandBus {
       throw new Error(`Driver '${resolvedCommand.driver}' not found.`);
     }
 
-    await driver.execute(resolvedCommand);
+    return await driver.execute(resolvedCommand);
   }
 
   private resolveCommand(command: AgentCommand): LegacyAgentCommand {
@@ -79,3 +79,4 @@ export class CommandBus {
     }
   }
 }
+

@@ -1,0 +1,2 @@
+Workflow continuation test completed successfully.
+Next step should be generated automatically after REPORT.

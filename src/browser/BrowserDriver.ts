@@ -3,6 +3,7 @@ import { defaultBrowserConfig, type BrowserConfig } from "./BrowserConfig.js";
 import { BrowserSession } from "./BrowserSession.js";
 import { ConversationManager } from "./ConversationManager.js";
 import { ConversationWatcher } from "./ConversationWatcher.js";
+import { BrowserEventLogger } from "./BrowserEventLogger.js";
 
 export class BrowserDriver {
   readonly name = "browser";
@@ -10,6 +11,7 @@ export class BrowserDriver {
   private readonly session: BrowserSession;
   private conversation: ConversationManager | null = null;
   private watcher: ConversationWatcher | null = null;
+  private readonly eventLogger = new BrowserEventLogger();
 
   constructor(private readonly config: BrowserConfig = defaultBrowserConfig) {
     this.session = new BrowserSession(config);
@@ -20,6 +22,7 @@ export class BrowserDriver {
 
     this.conversation = new ConversationManager(page);
     this.watcher = new ConversationWatcher(this.conversation);
+    this.eventLogger.start();
 
     if (this.config.dedicatedConversationUrl) {
       await this.conversation.open(this.config.dedicatedConversationUrl);

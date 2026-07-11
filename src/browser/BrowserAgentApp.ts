@@ -1,8 +1,9 @@
-﻿import { CapabilityRegistry } from "../core/CapabilityRegistry.js";
+import { CapabilityRegistry } from "../core/CapabilityRegistry.js";
 import { CommandBus } from "../core/CommandBus.js";
 import { DriverManager } from "../core/DriverManager.js";
 import { Runtime } from "../core/Runtime.js";
 import { registerBuiltinDrivers } from "../core/registerBuiltinDrivers.js";
+import { SessionStore } from "../session/index.js";
 import { BrowserAgent } from "./BrowserAgent.js";
 import { BrowserDriver } from "./BrowserDriver.js";
 import { defaultBrowserConfig } from "./BrowserConfig.js";
@@ -17,6 +18,17 @@ export class BrowserAgentApp {
   constructor(private readonly config: BrowserAgentAppConfig) {}
 
   async start(): Promise<void> {
+    const sessionStore = new SessionStore();
+    const previousSession = sessionStore.read();
+    const isSameConversation = previousSession.conversationUrl === this.config.conversationUrl;
+    const shouldSendOnboarding = !isSameConversation || !previousSession.memoryRestored;
+
+    sessionStore.patch({
+      conversationUrl: this.config.conversationUrl,
+      memoryRestored: isSameConversation ? previousSession.memoryRestored : false,
+      runtimeState: "starting",
+    });
+
     const driverManager = new DriverManager();
     const capabilityRegistry = new CapabilityRegistry();
 
@@ -36,9 +48,15 @@ export class BrowserAgentApp {
 
     printBrowserAgentStartupHelp(this.config.conversationUrl);
 
-    console.log("[agent] Sending onboarding message to ChatGPT...");
-    await browser.getConversation().sendMessage(createChatGptOnboardingMessage());
-    console.log("[agent] Onboarding message sent.");
+    if (shouldSendOnboarding) {
+      console.log("[agent] Sending onboarding message to ChatGPT...");
+      await browser.getConversation().sendMessage(createChatGptOnboardingMessage());
+      console.log("[agent] Onboarding message sent.");
+    } else {
+      console.log("[agent] Session already restored for this conversation. Skipping onboarding message.");
+    }
+
+    sessionStore.patch({ runtimeState: "idle" });
 
     await agent.start();
   }
