@@ -27,6 +27,23 @@ export type MissionDefinition = {
   currentMilestone: string;
   completedMilestones: string[];
   nextMilestones: string[];
+  architectureDecisions?: Array<{
+    title: string;
+    summary: string;
+    documentPath?: string;
+  }>;
+  recommendedReading?: Array<{
+    title: string;
+    path: string;
+    reason: string;
+    priority: number;
+  }>;
+  knownLimitations?: string[];
+  nextActions?: Array<{
+    priority: number;
+    title: string;
+    reason: string;
+  }>;
   rules: string[];
   updatedAt: string;
 };
@@ -89,6 +106,27 @@ export type MissionContext = {
   memory: MissionMemoryDocument[];
   repository: MissionRepositoryState;
   openTasks: string[];
+  continuation: {
+    currentMilestone: string;
+    pendingMilestones: string[];
+    architectureDecisions: Array<{
+      title: string;
+      summary: string;
+      documentPath?: string;
+    }>;
+    recommendedReading: Array<{
+      title: string;
+      path: string;
+      reason: string;
+      priority: number;
+    }>;
+    knownLimitations: string[];
+    nextActions: Array<{
+      priority: number;
+      title: string;
+      reason: string;
+    }>;
+  };
   rules: string[];
   warnings: string[];
   generatedAt: string;

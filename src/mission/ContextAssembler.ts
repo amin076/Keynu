@@ -28,6 +28,16 @@ export class ContextAssembler {
       memory,
       repository,
       openTasks: [...mission.nextMilestones],
+      continuation: {
+        currentMilestone: mission.currentMilestone,
+        pendingMilestones: [...mission.nextMilestones],
+        architectureDecisions: [...(mission.architectureDecisions ?? [])],
+        recommendedReading: [...(mission.recommendedReading ?? [])]
+          .sort((a, b) => a.priority - b.priority),
+        knownLimitations: [...(mission.knownLimitations ?? [])],
+        nextActions: [...(mission.nextActions ?? [])]
+          .sort((a, b) => a.priority - b.priority),
+      },
       rules: [...new Set(mission.rules)],
       warnings,
       generatedAt: new Date().toISOString(),
