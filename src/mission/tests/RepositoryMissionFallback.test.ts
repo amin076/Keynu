@@ -14,7 +14,7 @@ try {
   assert.equal(selection.mission.id, "knowledge-graph-engine");
   assert.equal(
     selection.mission.currentMilestone,
-    "Project Continuation Bootstrap and KAP Type-Specific Validation",
+    "Clean New-Chat Recovery Verification",
   );
   assert(selection.mission.nextActions?.length);
   console.log("Repository mission fallback tests passed.");
