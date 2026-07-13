@@ -1,0 +1,116 @@
+{
+  "id": "knowledge-graph-engine",
+  "projectId": "keynu",
+  "title": "Keynu Knowledge Graph Engine and Mission Manager",
+  "goal": "Build automatic project-context restoration, architecture graph visualization, and live runtime workflow tracing for Keynu and connected applications.",
+  "status": "ACTIVE",
+  "currentMilestone": "Project Continuation Bootstrap and KAP Type-Specific Validation",
+  "completedMilestones": [
+    "Knowledge Graph foundation document",
+    "Graph type definitions",
+    "Initial project scanner and graph snapshot store",
+    "Mission Manager architecture and type definitions",
+    "Mission registry loader and state store",
+    "Memory loader and context assembler",
+    "Mission Bootstrap builder and BrowserAgent integration",
+    "KAP 1.0 protocol documentation",
+    "KAP-aware Mission Bootstrap",
+    "Extensible KAP envelope metadata model",
+    "Zod-based KAP envelope validator",
+    "KAP validator integration with extractor"
+  ],
+  "nextMilestones": [
+    "Project Continuation Bootstrap",
+    "Type-specific KAP message validation",
+    "Recommended-reading and architecture-decision restoration",
+    "Full new-chat recovery test",
+    "Mission dashboard panel",
+    "Graph API and visualization"
+  ],
+  "rules": [
+    "Use Node.js-first architecture.",
+    "Prefer native Node.js APIs.",
+    "Use PowerShell only when Node.js cannot perform the operation.",
+    "Use small independently verifiable KAP jobs.",
+    "Read back every created or modified file.",
+    "Run TypeScript build after code integration changes.",
+    "Preserve the active Keynu browser connection.",
+    "Do not overwrite unrelated working-tree changes."
+  ],
+  "updatedAt": "2026-07-13T15:39:07.252Z",
+  "architectureDecisions": [
+    {
+      "title": "Repository memory is the source of truth",
+      "summary": "Project knowledge must live in repository-managed mission and memory files rather than depending on one AI chat.",
+      "documentPath": "docs/ADR/ADR-001-Repository-Memory.md"
+    },
+    {
+      "title": "KAP is an application-level protocol",
+      "summary": "KAP defines Keynu mission, job, report, error, evidence, and control semantics while transport may use browser chat, files, HTTP, WebSocket, JSON-RPC, or MCP.",
+      "documentPath": "docs/KAP/KAP_PROTOCOL_V1.md"
+    },
+    {
+      "title": "Node.js-first runtime architecture",
+      "summary": "Use native Node.js APIs for Runtime operations and use PowerShell only when Node.js cannot perform the required operation."
+    },
+    {
+      "title": "Verified execution evidence",
+      "summary": "An AI must not claim local completion until a matching KAP REPORT provides real execution evidence and verification."
+    }
+  ],
+  "recommendedReading": [
+    {
+      "title": "KAP 1.0 specification",
+      "path": "docs/KAP/KAP_PROTOCOL_V1.md",
+      "reason": "Required to understand KAP envelopes, message flow, and AI response rules.",
+      "priority": 1
+    },
+    {
+      "title": "KAP architecture requirements",
+      "path": "docs/KAP/KAP_ARCHITECTURE_REQUIREMENTS.md",
+      "reason": "Defines reliability, correlation, retry, schemas, chunking, and security work still required.",
+      "priority": 2
+    },
+    {
+      "title": "Keynu Agent Protocol book chapter",
+      "path": "docs/BOOK/16_KEYNU_AGENT_PROTOCOL.md",
+      "reason": "Explains how KAP fits into the wider Keynu architecture.",
+      "priority": 3
+    },
+    {
+      "title": "Development protocol",
+      "path": "docs/BOOK/10_DEVELOPMENT_PROTOCOL.md",
+      "reason": "Defines mandatory rules for AI-assisted Keynu development.",
+      "priority": 4
+    },
+    {
+      "title": "Repository memory ADR",
+      "path": "docs/ADR/ADR-001-Repository-Memory.md",
+      "reason": "Explains why repository memory replaces dependence on chat history.",
+      "priority": 5
+    }
+  ],
+  "knownLimitations": [
+    "KAP currently validates the base envelope but does not yet fully validate every message-type payload.",
+    "Mission and memory files require explicit updates when milestones are completed; automatic milestone completion is not implemented yet.",
+    "A full recovery test with a completely new chat or unfamiliar AI has not yet been completed.",
+    "The current memory documents contain some older Dashboard priorities and require synchronization with the active mission."
+  ],
+  "nextActions": [
+    {
+      "priority": 1,
+      "title": "Verify Project Continuation Bootstrap output",
+      "reason": "Confirm a newly built Mission Bootstrap contains current milestone, pending work, decisions, reading references, limitations, and ordered next actions."
+    },
+    {
+      "priority": 2,
+      "title": "Implement type-specific KAP validation",
+      "reason": "Reject JOB, REPORT, ERROR, MISSION_ACK, and CONTROL messages whose payload does not satisfy the message contract."
+    },
+    {
+      "priority": 3,
+      "title": "Run a clean new-chat recovery test",
+      "reason": "Prove that a new and unfamiliar AI can acknowledge KAP and continue the correct next action without manual project explanation."
+    }
+  ]
+}

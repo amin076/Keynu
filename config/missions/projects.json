@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "projects": [
+    {
+      "id": "keynu",
+      "name": "Keynu",
+      "root": ".",
+      "activeMissionId": "knowledge-graph-engine"
+    }
+  ]
+}

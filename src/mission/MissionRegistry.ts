@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import type {
   MissionDefinition,
   MissionProject,
@@ -12,23 +12,38 @@ export type ActiveMissionSelection = {
 };
 
 export class MissionRegistry {
+  private readonly localRegistryPath: string;
+  private readonly repositoryRegistryPath: string;
+
   constructor(
     private readonly repositoryRoot = process.cwd(),
-    private readonly registryPath = join(
+    registryPath?: string,
+  ) {
+    this.localRegistryPath =
+      registryPath ??
+      join(repositoryRoot, ".keynu", "missions", "projects.json");
+    this.repositoryRegistryPath = join(
       repositoryRoot,
-      ".keynu",
+      "config",
       "missions",
       "projects.json",
-    ),
-  ) {}
+    );
+  }
 
   loadRegistry(): MissionRegistryData {
-    if (!existsSync(this.registryPath)) {
-      throw new Error(`Mission registry not found: ${this.registryPath}`);
+    const registryPath = this.selectExistingPath([
+      this.localRegistryPath,
+      this.repositoryRegistryPath,
+    ]);
+
+    if (!registryPath) {
+      throw new Error(
+        `Mission registry not found. Checked: ${this.localRegistryPath}, ${this.repositoryRegistryPath}`,
+      );
     }
 
     const parsed = JSON.parse(
-      readFileSync(this.registryPath, "utf8"),
+      readFileSync(registryPath, "utf8"),
     ) as MissionRegistryData;
 
     if (parsed.version !== "1.0" || !Array.isArray(parsed.projects)) {
@@ -41,7 +56,9 @@ export class MissionRegistry {
   getProjects(): MissionProject[] {
     return this.loadRegistry().projects.map((project) => ({
       ...project,
-      root: resolve(project.root),
+      root: isAbsolute(project.root)
+        ? resolve(project.root)
+        : resolve(this.repositoryRoot, project.root),
     }));
   }
 
@@ -57,16 +74,29 @@ export class MissionRegistry {
 
   loadMission(projectId: string, missionId: string): MissionDefinition {
     const project = this.getProject(projectId);
-    const missionPath = join(
+    const localMissionPath = join(
       project.root,
       ".keynu",
       "missions",
       project.id,
       `${missionId}.json`,
     );
+    const repositoryMissionPath = join(
+      this.repositoryRoot,
+      "config",
+      "missions",
+      project.id,
+      `${missionId}.json`,
+    );
+    const missionPath = this.selectExistingPath([
+      localMissionPath,
+      repositoryMissionPath,
+    ]);
 
-    if (!existsSync(missionPath)) {
-      throw new Error(`Mission definition not found: ${missionPath}`);
+    if (!missionPath) {
+      throw new Error(
+        `Mission definition not found. Checked: ${localMissionPath}, ${repositoryMissionPath}`,
+      );
     }
 
     const mission = JSON.parse(
@@ -95,6 +125,10 @@ export class MissionRegistry {
       project,
       mission: this.loadMission(project.id, project.activeMissionId),
     };
+  }
+
+  private selectExistingPath(paths: string[]): string | undefined {
+    return paths.find((path) => existsSync(path));
   }
 
   private validateMission(
