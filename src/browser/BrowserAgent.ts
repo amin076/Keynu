@@ -7,6 +7,7 @@ import { BrowserDriver } from "./BrowserDriver.js";
 import { VerificationReportIntegration } from "../verification/VerificationReportIntegration.js";
 import { MissionManager } from "../mission/MissionManager.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
+import { SessionStore } from "../session/index.js";
 
 export class BrowserAgent {
   private readonly processedJobIds = new Set<string>();
@@ -46,6 +47,18 @@ export class BrowserAgent {
           const state = this.missionManager.acknowledge(
             kap as MissionAckPayload,
           );
+
+          new SessionStore().patch({
+            memoryRestored: true,
+            missionAcknowledgedAt: new Date().toISOString(),
+            runtimeState: "idle",
+          });
+
+          new SessionStore().patch({
+            memoryRestored: true,
+            missionAcknowledgedAt: new Date().toISOString(),
+            runtimeState: "idle",
+          });
 
           console.log(
             `[agent] Mission acknowledgement accepted for '${state.missionId}'.`,

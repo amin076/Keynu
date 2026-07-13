@@ -23,8 +23,16 @@ export class BrowserAgentApp {
     const previousSession = sessionStore.read();
     const isSameConversation =
       previousSession.conversationUrl === this.config.conversationUrl;
+    const bootstrapAgeMs = previousSession.missionBootstrapSentAt
+      ? Date.now() - Date.parse(previousSession.missionBootstrapSentAt)
+      : Number.POSITIVE_INFINITY;
+    const bootstrapPending =
+      isSameConversation &&
+      !previousSession.memoryRestored &&
+      previousSession.missionBootstrapConversationUrl === this.config.conversationUrl &&
+      bootstrapAgeMs < 5 * 60 * 1000;
     const shouldRestoreMission =
-      !isSameConversation || !previousSession.memoryRestored;
+      !isSameConversation || (!previousSession.memoryRestored && !bootstrapPending);
 
     sessionStore.patch({
       conversationUrl: this.config.conversationUrl,
@@ -63,7 +71,9 @@ export class BrowserAgentApp {
       );
     } else {
       console.log(
-        "[agent] Mission already restored for this conversation. Skipping bootstrap.",
+        bootstrapPending
+          ? "[agent] Mission bootstrap already sent; waiting for acknowledgement."
+          : "[agent] Mission already restored for this conversation. Skipping bootstrap.",
       );
     }
 
@@ -91,7 +101,10 @@ export class BrowserAgentApp {
       await conversation.sendMessage(message);
 
       sessionStore.patch({
-        memoryRestored: true,
+        memoryRestored: false,
+        missionBootstrapSentAt: new Date().toISOString(),
+        missionBootstrapConversationUrl: this.config.conversationUrl,
+        missionAcknowledgedAt: undefined,
         runtimeState: "idle",
       });
 
