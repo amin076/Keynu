@@ -39,3 +39,8 @@ const invalidId = extractKapEnvelope(
 assert.equal(invalidId, null);
 
 console.log("KapExtractor validator integration tests passed.");
+
+const domFlattened = extractKapEnvelope(
+  "kap" + JSON.stringify(validEnvelope),
+);
+assert.equal(domFlattened?.id, validEnvelope.id);

@@ -22,3 +22,13 @@ assert.equal(invalid.valid, false);
 if (!invalid.valid) assert(invalid.issues.length > 0);
 
 console.log("KapValidator tests passed.");
+
+const timezoneOffset = validateKapEnvelope({
+  protocol: "KAP",
+  version: "1.0",
+  type: "JOB",
+  id: "job-timezone-offset-test",
+  createdAt: "2026-07-14T08:20:00+10:00",
+  payload: { target: "powershell" },
+});
+assert.equal(timezoneOffset.valid, true);

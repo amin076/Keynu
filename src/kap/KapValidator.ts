@@ -32,7 +32,7 @@ export const KapEnvelopeMetadataSchema = z
     idempotencyKey: NonEmptyString.optional(),
     contentType: NonEmptyString.optional(),
     schema: NonEmptyString.optional(),
-    deadlineAt: z.iso.datetime().optional(),
+    deadlineAt: z.iso.datetime({ offset: true }).optional(),
     retry: KapRetryPolicySchema.optional(),
     chunk: KapChunkInfoSchema.optional(),
     extensions: z.record(z.string(), z.unknown()).optional(),
@@ -43,7 +43,7 @@ const BaseEnvelopeShape = {
   protocol: z.literal("KAP"),
   version: z.literal("1.0"),
   id: NonEmptyString,
-  createdAt: z.iso.datetime().optional(),
+  createdAt: z.iso.datetime({ offset: true }).optional(),
   metadata: KapEnvelopeMetadataSchema.optional(),
 };
 

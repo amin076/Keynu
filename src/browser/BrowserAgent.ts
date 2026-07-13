@@ -28,12 +28,25 @@ export class BrowserAgent {
 
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
+
+      console.log("[agent] Assistant message delivered by watcher.");
+      console.log("[agent] Message length:", messageText.length);
+      console.log(
+        "[agent] Message preview:",
+        JSON.stringify(messageText.slice(0, 500)),
+      );
+
       const kap = extractKapEnvelope(messageText) as any;
 
       if (!kap) {
-        await watcher.markReported(messageText);
+        console.error("[agent] KAP extraction or validation failed.");
+        await watcher.markFailed(messageText);
         continue;
       }
+
+      console.log(
+        `[agent] KAP envelope accepted: type=${kap.type}, id=${kap.id}`,
+      );
 
       if (kap.type === "MISSION_ACK") {
         if (this.processedMissionAckIds.has(kap.id)) {
