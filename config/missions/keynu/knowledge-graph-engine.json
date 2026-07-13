@@ -4,7 +4,7 @@
   "title": "Keynu Knowledge Graph Engine and Mission Manager",
   "goal": "Build automatic project-context restoration, architecture graph visualization, and live runtime workflow tracing for Keynu and connected applications.",
   "status": "ACTIVE",
-  "currentMilestone": "Project Continuation Bootstrap and KAP Type-Specific Validation",
+  "currentMilestone": "Clean New-Chat Recovery Verification",
   "completedMilestones": [
     "Knowledge Graph foundation document",
     "Graph type definitions",
@@ -17,12 +17,12 @@
     "KAP-aware Mission Bootstrap",
     "Extensible KAP envelope metadata model",
     "Zod-based KAP envelope validator",
-    "KAP validator integration with extractor"
-  ],
-  "nextMilestones": [
+    "KAP validator integration with extractor",
     "Project Continuation Bootstrap",
     "Type-specific KAP message validation",
-    "Recommended-reading and architecture-decision restoration",
+    "Recommended-reading and architecture-decision restoration"
+  ],
+  "nextMilestones": [
     "Full new-chat recovery test",
     "Mission dashboard panel",
     "Graph API and visualization"
@@ -37,7 +37,7 @@
     "Preserve the active Keynu browser connection.",
     "Do not overwrite unrelated working-tree changes."
   ],
-  "updatedAt": "2026-07-13T15:39:07.252Z",
+  "updatedAt": "2026-07-13T20:56:26.758Z",
   "architectureDecisions": [
     {
       "title": "Repository memory is the source of truth",
@@ -91,7 +91,6 @@
     }
   ],
   "knownLimitations": [
-    "KAP currently validates the base envelope but does not yet fully validate every message-type payload.",
     "Mission and memory files require explicit updates when milestones are completed; automatic milestone completion is not implemented yet.",
     "A full recovery test with a completely new chat or unfamiliar AI has not yet been completed.",
     "The current memory documents contain some older Dashboard priorities and require synchronization with the active mission."
@@ -99,18 +98,18 @@
   "nextActions": [
     {
       "priority": 1,
-      "title": "Verify Project Continuation Bootstrap output",
-      "reason": "Confirm a newly built Mission Bootstrap contains current milestone, pending work, decisions, reading references, limitations, and ordered next actions."
+      "title": "Run a clean new-chat recovery test",
+      "reason": "Connect Keynu to a completely new conversation and verify that an unfamiliar AI understands KAP, returns MISSION_ACK, restores the active mission, and selects the correct next action without manual project explanation."
     },
     {
       "priority": 2,
-      "title": "Implement type-specific KAP validation",
-      "reason": "Reject JOB, REPORT, ERROR, MISSION_ACK, and CONTROL messages whose payload does not satisfy the message contract."
+      "title": "Record recovery-test outcome",
+      "reason": "Persist success or failure evidence in the repository-backed mission definition."
     },
     {
       "priority": 3,
-      "title": "Run a clean new-chat recovery test",
-      "reason": "Prove that a new and unfamiliar AI can acknowledge KAP and continue the correct next action without manual project explanation."
+      "title": "Continue with Mission Dashboard",
+      "reason": "Begin the next product milestone only after independent chat recovery has been proven."
     }
   ]
 }
