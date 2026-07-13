@@ -5,6 +5,18 @@ export async function runPowerShellFileOps(jobId: string, payload: PowerShellFil
   const startedAt = new Date().toISOString();
   const errors: string[] = [];
 
+  const requestedReadCount = payload.readFiles?.length ?? 0;
+  const requestedWriteCount = payload.writeFiles?.length ?? 0;
+  const requestedCommandCount = payload.commands?.length ?? 0;
+  const requestedOperationCount =
+    requestedReadCount + requestedWriteCount + requestedCommandCount;
+
+  if (requestedOperationCount === 0) {
+    errors.push(
+      "PowerShell job contains no executable operations. Provide readFiles, writeFiles, or commands.",
+    );
+  }
+
   const reads = (payload.readFiles ?? []).map((item) => readPowerShellFile(payload.cwd, item));
   for (const read of reads) if (!read.ok) errors.push(`read failed: ${read.path}`);
 

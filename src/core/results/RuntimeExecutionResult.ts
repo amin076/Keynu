@@ -7,6 +7,11 @@ export type StepExecutionResult = {
   finishedAt: string;
   durationMs: number;
   command: unknown;
+
+  // Real driver execution result
+  // This is required for verification and certification.
+  result?: unknown;
+
   error?: string;
 };
 

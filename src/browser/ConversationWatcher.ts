@@ -14,6 +14,18 @@ export const defaultConversationWatcherOptions: ConversationWatcherOptions = {
   stableMs: 1500,
 };
 
+function isRecoverableBrowserNavigationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    message.includes("Execution context was destroyed") ||
+    message.includes("Cannot find context with specified id") ||
+    message.includes("Most likely the page has been closed") ||
+    message.includes("Target page, context or browser has been closed") ||
+    message.includes("Navigation")
+  );
+}
+
 export class ConversationWatcher {
   private readonly memory = new ConversationMemory();
   private baselineMessage: AssistantMessageSnapshot | null = null;
@@ -28,10 +40,25 @@ export class ConversationWatcher {
     console.log("[watcher] Waiting for NEW assistant message...");
 
     while (true) {
-      const stableMessage = await this.conversation.waitForStableAssistantMessage(
-        this.baselineMessage?.id ?? null,
-        this.options.stableMs,
-      );
+      let stableMessage: AssistantMessageSnapshot;
+
+      try {
+        stableMessage = await this.conversation.waitForStableAssistantMessage(
+          this.baselineMessage?.id ?? null,
+          this.options.stableMs,
+        );
+      } catch (error) {
+        if (!isRecoverableBrowserNavigationError(error)) {
+          throw error;
+        }
+
+        console.warn(
+          "[watcher] Browser navigation replaced the execution context. Retrying...",
+        );
+
+        await this.sleep(Math.max(this.options.pollMs, 1000));
+        continue;
+      }
 
       if (stableMessage.id === this.baselineMessage?.id) {
         await this.sleep(this.options.pollMs);

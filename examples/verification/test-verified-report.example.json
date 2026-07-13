@@ -1,0 +1,22 @@
+{
+  "protocol": "KAP",
+  "version": "1.0",
+  "type": "REPORT",
+  "id": "report-example-verified-001",
+  "createdAt": "2026-07-12T05:37:00Z",
+  "payload": {
+    "jobId": "job-example-001",
+    "status": "COMPLETED",
+    "result": {
+      "execution": {
+        "status": "COMPLETED"
+      },
+      "verification": {
+        "status": "VERIFIED"
+      },
+      "certificate": {
+        "status": "VERIFIED"
+      }
+    }
+  }
+}

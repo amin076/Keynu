@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import {
   existsSync,
@@ -6,9 +7,13 @@ import {
   writeFileSync,
   mkdirSync,
   copyFileSync,
+  statSync,
 } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
-import { checkPowerShellCommandSafety, type PowerShellCommandSpec } from "./powershell-safety.js";
+import {
+  checkPowerShellCommandSafety,
+  type PowerShellCommandSpec,
+} from "./powershell-safety.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,14 +47,29 @@ function safeResolve(cwd: string, filePath: string) {
   const fullPath = resolve(cwd, filePath);
   const root = resolve(cwd);
 
-  if (!fullPath.startsWith(root)) {
+  if (fullPath !== root && !fullPath.startsWith(root + "\\") && !fullPath.startsWith(root + "/")) {
     throw new Error("Unsafe path outside cwd: " + filePath);
   }
 
   return fullPath;
 }
 
-async function runCommand(commandSpec: PowerShellCommandSpec, cwd: string, allowDangerousCommands: boolean) {
+function collectArtifactEvidence(fullPath: string) {
+  const data = readFileSync(fullPath);
+  const stats = statSync(fullPath);
+
+  return {
+    size: stats.size,
+    sha256: createHash("sha256").update(data).digest("hex"),
+    modifiedAt: stats.mtime.toISOString(),
+  };
+}
+
+async function runCommand(
+  commandSpec: PowerShellCommandSpec,
+  cwd: string,
+  allowDangerousCommands: boolean,
+) {
   const safety = checkPowerShellCommandSafety(commandSpec);
   const command = commandSpec.command;
   const args = commandSpec.args ?? [];
@@ -66,7 +86,7 @@ async function runCommand(commandSpec: PowerShellCommandSpec, cwd: string, allow
       stderr: "",
       error: safety.reason ?? "Command blocked by safety policy",
       startedAt,
-      finishedAt: new Date().toISOString()
+      finishedAt: new Date().toISOString(),
     };
   }
 
@@ -120,7 +140,13 @@ async function runCommand(commandSpec: PowerShellCommandSpec, cwd: string, allow
 function backupPath(cwd: string, filePath: string) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const safeName = normalize(filePath).replace(/[\\/]/g, "__");
-  return join(cwd, ".keynu", "powershell", "backups", timestamp + "-" + safeName);
+  return join(
+    cwd,
+    ".keynu",
+    "powershell",
+    "backups",
+    timestamp + "-" + safeName,
+  );
 }
 
 export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
@@ -134,29 +160,20 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
   const allowDangerousCommands = payload.allowDangerousCommands === true;
   const reportMode = payload.reportMode ?? "full";
 
-  if (!existsSync(cwd)) {
-    throw new Error("cwd does not exist: " + cwd);
+  const requestedOperationCount =
+    (payload.readFiles?.length ?? 0) +
+    (payload.writeFiles?.length ?? 0) +
+    (payload.commands?.length ?? 0) +
+    (payload.buildCommand ? 1 : 0);
+
+  if (requestedOperationCount === 0) {
+    errors.push(
+      "PowerShell patch job contains no executable operations. Provide readFiles, writeFiles, commands, or buildCommand.",
+    );
   }
 
-  for (const filePath of payload.readFiles ?? []) {
-    try {
-      const fullPath = safeResolve(cwd, filePath);
-      const content = readFileSync(fullPath, "utf8");
-      const maxReportChars = 12000;
-      const reportContent = content.length > maxReportChars ? content.slice(0, maxReportChars) : content;
-      reads.push({
-        path: filePath,
-        ok: true,
-        content: reportMode === "summary" ? undefined : reportContent,
-        preview: reportMode === "summary" ? reportContent.slice(0, 800) : undefined,
-        bytes: Buffer.byteLength(reportContent),
-        truncated: content.length > maxReportChars,
-        originalBytes: Buffer.byteLength(content),
-      });
-    } catch (error: any) {
-      reads.push({ path: filePath, ok: false, error: error.message ?? String(error) });
-      errors.push("read failed: " + filePath);
-    }
+  if (!existsSync(cwd)) {
+    throw new Error("cwd does not exist: " + cwd);
   }
 
   for (const file of payload.writeFiles ?? []) {
@@ -172,33 +189,111 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
       }
 
       writeFileSync(fullPath, file.content, "utf8");
-      writes.push({ path: file.path, ok: true, bytes: Buffer.byteLength(file.content), backup });
+      const artifact = collectArtifactEvidence(fullPath);
+
+      writes.push({
+        path: file.path,
+        ok: true,
+        bytes: Buffer.byteLength(file.content),
+        backup,
+        artifact,
+      });
     } catch (error: any) {
-      writes.push({ path: file.path, ok: false, error: error.message ?? String(error) });
+      writes.push({
+        path: file.path,
+        ok: false,
+        error: error.message ?? String(error),
+      });
       errors.push("write failed: " + file.path);
     }
   }
 
+  for (const filePath of payload.readFiles ?? []) {
+    try {
+      const fullPath = safeResolve(cwd, filePath);
+      const content = readFileSync(fullPath, "utf8");
+      const maxReportChars = 12000;
+      const reportContent =
+        content.length > maxReportChars
+          ? content.slice(0, maxReportChars)
+          : content;
+      const artifact = collectArtifactEvidence(fullPath);
+
+      reads.push({
+        path: filePath,
+        ok: true,
+        content: reportMode === "summary" ? undefined : reportContent,
+        preview:
+          reportMode === "summary"
+            ? reportContent.slice(0, 800)
+            : undefined,
+        bytes: Buffer.byteLength(reportContent),
+        truncated: content.length > maxReportChars,
+        originalBytes: Buffer.byteLength(content),
+        artifact,
+      });
+    } catch (error: any) {
+      reads.push({
+        path: filePath,
+        ok: false,
+        error: error.message ?? String(error),
+      });
+      errors.push("read failed: " + filePath);
+    }
+  }
+
   for (const commandSpec of payload.commands ?? []) {
-    const result = await runCommand(commandSpec, cwd, allowDangerousCommands);
+    const result = await runCommand(
+      commandSpec,
+      cwd,
+      allowDangerousCommands,
+    );
     commands.push(result);
+
     if (!result.ok) {
-      errors.push("command failed: " + commandSpec.command + " " + (commandSpec.args ?? []).join(" "));
+      errors.push(
+        "command failed: " +
+          commandSpec.command +
+          " " +
+          (commandSpec.args ?? []).join(" "),
+      );
     }
   }
 
   let build = null;
   if (payload.buildCommand) {
-    build = await runCommand(payload.buildCommand, cwd, allowDangerousCommands);
+    build = await runCommand(
+      payload.buildCommand,
+      cwd,
+      allowDangerousCommands,
+    );
+
     if (!build.ok) {
-      errors.push("build failed: " + payload.buildCommand.command + " " + (payload.buildCommand.args ?? []).join(" "));
+      errors.push(
+        "build failed: " +
+          payload.buildCommand.command +
+          " " +
+          (payload.buildCommand.args ?? []).join(" "),
+      );
     }
   }
 
   const git = {
-    branch: await runCommand({ command: "git", args: ["branch", "--show-current"] }, cwd, true),
-    status: await runCommand({ command: "git", args: ["status", "--short"] }, cwd, true),
-    diffStat: await runCommand({ command: "git", args: ["diff", "--stat"] }, cwd, true),
+    branch: await runCommand(
+      { command: "git", args: ["branch", "--show-current"] },
+      cwd,
+      true,
+    ),
+    status: await runCommand(
+      { command: "git", args: ["status", "--short"] },
+      cwd,
+      true,
+    ),
+    diffStat: await runCommand(
+      { command: "git", args: ["diff", "--stat"] },
+      cwd,
+      true,
+    ),
   };
 
   const result = {
