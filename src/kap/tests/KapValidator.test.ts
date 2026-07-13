@@ -7,7 +7,7 @@ const valid = validateKapEnvelope({
   type: "JOB",
   id: "job-validator-test",
   createdAt: new Date().toISOString(),
-  payload: {},
+  payload: { target: "powershell" },
   metadata: { correlationId: "correlation-1", sequence: 0 },
 });
 assert.equal(valid.valid, true);
