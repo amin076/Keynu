@@ -23,3 +23,4 @@ This directory contains the technical book for Keynu and KAOS Runtime.
 15 Future Vision
 
 Status: Documentation Sprint Started.
+16 Keynu Agent Protocol

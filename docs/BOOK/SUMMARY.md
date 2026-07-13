@@ -60,3 +60,4 @@ Start Here
 Purpose:
 
 This book is the primary knowledge source for humans and AI systems developing KAOS Runtime. Every new AI should begin here before modifying the Runtime.
+16 Keynu Agent Protocol
