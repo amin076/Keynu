@@ -3,7 +3,7 @@ import {
   isKapEnvelope,
   isKapJobEnvelope,
   taskFromKapJob,
-  type KapEnvelope,
+  type KapJobEnvelope,
 } from "../KapEnvelope.js";
 
 const task = {
@@ -13,7 +13,7 @@ const task = {
   steps: [],
 };
 
-const envelope: KapEnvelope<typeof task> = {
+const envelope: KapJobEnvelope = {
   protocol: "KAP",
   version: "1.0",
   type: "JOB",
