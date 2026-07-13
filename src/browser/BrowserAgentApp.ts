@@ -10,6 +10,7 @@ import { BrowserDriver } from "./BrowserDriver.js";
 import { defaultBrowserConfig } from "./BrowserConfig.js";
 import { printBrowserAgentStartupHelp } from "./BrowserAgentHelp.js";
 import { createChatGptOnboardingMessage } from "./ChatGptOnboardingMessage.js";
+import { decideMissionBootstrap } from "./MissionBootstrapPolicy.js";
 
 export type BrowserAgentAppConfig = {
   conversationUrl: string;
@@ -21,18 +22,14 @@ export class BrowserAgentApp {
   async start(): Promise<void> {
     const sessionStore = new SessionStore();
     const previousSession = sessionStore.read();
-    const isSameConversation =
-      previousSession.conversationUrl === this.config.conversationUrl;
-    const bootstrapAgeMs = previousSession.missionBootstrapSentAt
-      ? Date.now() - Date.parse(previousSession.missionBootstrapSentAt)
-      : Number.POSITIVE_INFINITY;
-    const bootstrapPending =
-      isSameConversation &&
-      !previousSession.memoryRestored &&
-      previousSession.missionBootstrapConversationUrl === this.config.conversationUrl &&
-      bootstrapAgeMs < 5 * 60 * 1000;
-    const shouldRestoreMission =
-      !isSameConversation || (!previousSession.memoryRestored && !bootstrapPending);
+    const {
+      isSameConversation,
+      bootstrapPending,
+      shouldRestoreMission,
+    } = decideMissionBootstrap(
+      previousSession,
+      this.config.conversationUrl,
+    );
 
     sessionStore.patch({
       conversationUrl: this.config.conversationUrl,
