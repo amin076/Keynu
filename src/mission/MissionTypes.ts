@@ -105,8 +105,20 @@ export type MissionBootstrapPayload = {
     missionId: string;
     context: MissionContext;
     validation: MissionValidationResult;
+    protocolGuide: {
+      name: "Keynu Agent Protocol";
+      abbreviation: "KAP";
+      version: "1.0";
+      purpose: string;
+      documentPath: string;
+      transportFormat: "fenced-kap-json";
+      mandatoryRules: string[];
+    };
     requiredResponse: {
       type: "MISSION_ACK";
+      format: "fenced-kap-json";
+      requiredFields: string[];
+      example: MissionAckPayload;
     };
   };
 };

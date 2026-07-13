@@ -51,8 +51,53 @@ export class BootstrapBuilder {
         missionId: budgetedContext.mission.id,
         context: budgetedContext,
         validation,
+        protocolGuide: {
+          name: "Keynu Agent Protocol",
+          abbreviation: "KAP",
+          version: "1.0",
+          purpose:
+            "KAP is the application-level JSON protocol used between Keynu and AI systems for missions, jobs, reports, errors, evidence, and control messages.",
+          documentPath: "docs/KAP/KAP_PROTOCOL_V1.md",
+          transportFormat: "fenced-kap-json",
+          mandatoryRules: [
+            "Return the requested MISSION_ACK before sending executable jobs.",
+            "Place every KAP envelope inside one fenced kap code block.",
+            "Use valid JSON with protocol KAP and version 1.0.",
+            "Send executable work only as KAP JOB messages.",
+            "Do not claim local completion without a corresponding KAP REPORT.",
+            "Keep jobs and requested reports small enough for the chat transport limit.",
+          ],
+        },
         requiredResponse: {
           type: "MISSION_ACK",
+          format: "fenced-kap-json",
+          requiredFields: [
+            "protocol",
+            "version",
+            "type",
+            "id",
+            "createdAt",
+            "payload.projectId",
+            "payload.missionId",
+            "payload.status",
+            "payload.understoodMilestone",
+          ],
+          example: {
+            protocol: "KAP",
+            version: "1.0",
+            type: "MISSION_ACK",
+            id: "mission-ack-" + budgetedContext.mission.id,
+            createdAt,
+            payload: {
+              projectId: budgetedContext.project.id,
+              missionId: budgetedContext.mission.id,
+              status: "ACCEPTED",
+              understoodMilestone:
+                budgetedContext.mission.currentMilestone,
+              message:
+                "KAP 1.0 instructions and the active mission were understood.",
+            },
+          },
         },
       },
     };
