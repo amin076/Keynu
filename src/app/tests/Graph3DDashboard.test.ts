@@ -15,7 +15,7 @@ assert(server.includes('text/javascript; charset=utf-8'));
 assert(client.includes('new THREE.WebGLRenderer'));
 assert(client.includes('Three.js connected'));
 assert(client.includes('nodes and'));
-assert(client.includes('edges loaded')); 
+assert(client.includes('edges loaded'));
 
 assert(client.includes('/api/graph/effective/nodes'));
 assert(client.includes('/api/graph/effective/edges'));
