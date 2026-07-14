@@ -11,6 +11,7 @@ const NODE_LIMIT = 140;
 const EDGE_LIMIT = 320;
 
 let activeGraph3DCleanup: (() => void) | null = null;
+let graph3DReloadHandler: (() => void) | null = null;
 
 type Graph3DEdgeRenderRecord = {
   edge: Graph3DEdge;
@@ -435,14 +436,19 @@ export async function startGraph3D(): Promise<void> {
     });
   };
 
-  document.getElementById("graph3dReload")?.addEventListener("click", () => {
+  const reloadButton = document.getElementById("graph3dReload");
+  if (reloadButton && graph3DReloadHandler) {
+    reloadButton.removeEventListener("click", graph3DReloadHandler);
+  }
+  graph3DReloadHandler = () => {
     startGraph3D().catch((error) => {
       setGraph3DText(
         "graph3dStatus",
         error instanceof Error ? error.message : "Graph 3D reload failed",
       );
     });
-  });
+  };
+  reloadButton?.addEventListener("click", graph3DReloadHandler);
 
   window.addEventListener("resize", resize);
   resize();

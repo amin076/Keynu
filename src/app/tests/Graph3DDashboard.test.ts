@@ -74,4 +74,8 @@ assert(client.includes('renderer.dispose()'));
 assert(client.includes('cancelAnimationFrame'));
 assert(client.includes('startGraph3D().catch'));
 
+assert(client.includes('graph3DReloadHandler'));
+assert(client.includes('removeEventListener("click", graph3DReloadHandler)'));
+assert(client.includes('addEventListener("click", graph3DReloadHandler)'));
+
 console.log("Graph 3D Dashboard tests passed.");
