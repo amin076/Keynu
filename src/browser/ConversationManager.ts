@@ -181,9 +181,29 @@ export class ConversationManager {
 
     await this.submitMessage(input);
 
+    await this.confirmMessageSubmitted(input);
+
     this.state = "ready";
   }
 
+
+  private async confirmMessageSubmitted(input: Locator): Promise<void> {
+    await this.page.waitForFunction(
+      (element) => {
+        if (!(element instanceof HTMLElement)) return false;
+
+        if (element instanceof HTMLTextAreaElement) {
+          return element.value.trim().length === 0;
+        }
+
+        return (element.innerText ?? element.textContent ?? "").trim().length === 0;
+      },
+      await input.elementHandle(),
+      { timeout: 10000 },
+    ).catch(() => {
+      throw new Error("ChatGPT message submission could not be confirmed.");
+    });
+  }
 
   private async getMessageInput(): Promise<Locator> {
 

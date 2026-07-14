@@ -9,6 +9,7 @@ import { MissionManager } from "../mission/MissionManager.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
 import { SessionStore } from "../session/index.js";
 import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
+import { serializeBrowserReport } from "./BrowserReportDelivery.js";
 
 export class BrowserAgent {
   private readonly processedJobIds = new Set<string>();
@@ -168,9 +169,7 @@ export class BrowserAgent {
             },
           };
 
-          await conversation.sendMessage(
-            "```kap\n" + JSON.stringify(certifiedReport, null, 2) + "\n```",
-          );
+          await conversation.sendMessage(serializeBrowserReport(certifiedReport));
 
           if (status === "COMPLETED") {
             this.missionManager.recordJob(kap.id);
