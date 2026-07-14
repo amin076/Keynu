@@ -114,6 +114,41 @@ try {
   assert.equal(unknownNodeResponse.status, 404);
 
   console.log("Live Graph HTTP integration tests passed.");
+
+
+
+
+  const impossibleSearchResponse = await fetch(
+    handle.url + "/api/graph/effective/nodes?limit=140&search=" +
+      encodeURIComponent("__keynu_no_such_node_filter_test__"),
+    { cache: "no-store" },
+  );
+  assert.equal(impossibleSearchResponse.status, 200);
+  const impossibleSearch = await impossibleSearchResponse.json() as {
+    items?: Array<{ kind?: string }>;
+  };
+  assert.equal(impossibleSearch.items?.length ?? 0, 0);
+
+  const fileFilterResponse = await fetch(
+    handle.url + "/api/graph/effective/nodes?limit=140&kind=file",
+    { cache: "no-store" },
+  );
+  assert.equal(fileFilterResponse.status, 200);
+  const fileFilter = await fileFilterResponse.json() as {
+    items?: Array<{ kind?: string }>;
+  };
+  assert((fileFilter.items ?? []).every((node) => node.kind === "file"));
+
+  const jobFilterResponse = await fetch(
+    handle.url + "/api/graph/effective/nodes?limit=140&kind=job",
+    { cache: "no-store" },
+  );
+  assert.equal(jobFilterResponse.status, 200);
+  const jobFilter = await jobFilterResponse.json() as {
+    items?: Array<{ kind?: string }>;
+  };
+  assert((jobFilter.items ?? []).every((node) => node.kind === "job"));
+
 } finally {
   await handle.close();
   rmSync(root, { recursive: true, force: true });

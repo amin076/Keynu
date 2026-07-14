@@ -20,4 +20,5 @@ assert(source.includes('effectiveGraphQueryService.queryImpact'));
 assert(source.includes('effectiveGraphQueryService.queryRecentActivity'));
 
 
+
 console.log("Effective Graph API tests passed.");
