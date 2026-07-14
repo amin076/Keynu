@@ -2,12 +2,15 @@ export type PowerShellCommandSpec = {
   command: string;
   args?: string[];
   timeoutMs?: number;
+  runAfterFailure?: boolean;
 };
 
 export type PowerShellCommandResult = {
   command: string;
   args: string[];
   ok: boolean;
+  blocked?: boolean;
+  skipped?: boolean;
   stdout: string;
   stderr: string;
   error?: string;
@@ -48,6 +51,7 @@ export type PowerShellFileOpsJobPayload = {
   readFiles?: PowerShellReadFileSpec[];
   writeFiles?: PowerShellWriteFileSpec[];
   commands?: PowerShellCommandSpec[];
+  continueOnError?: boolean;
   includeGit?: boolean;
 };
 

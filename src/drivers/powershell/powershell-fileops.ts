@@ -31,10 +31,37 @@ export async function runPowerShellFileOps(jobId: string, payload: PowerShellFil
   for (const write of writes) if (!write.ok) errors.push(`write failed: ${write.path}`);
 
   const commands = [];
+  let commandChainFailed = false;
+
   for (const command of payload.commands ?? []) {
+    if (
+      commandChainFailed &&
+      payload.continueOnError !== true &&
+      command.runAfterFailure !== true
+    ) {
+      commands.push({
+        command: command.command,
+        args: command.args ?? [],
+        ok: false,
+        blocked: true,
+        skipped: true,
+        stdout: "",
+        stderr: "",
+        error: "Skipped because a previous command failed",
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        durationMs: 0,
+      });
+      continue;
+    }
+
     const result = await runPowerShellCommand(payload.cwd, command);
     commands.push(result);
-    if (!result.ok) errors.push(formatCompactCommandFailure(result));
+
+    if (!result.ok) {
+      commandChainFailed = true;
+      errors.push(formatCompactCommandFailure(result));
+    }
   }
 
   const git = payload.includeGit === false ? null : await collectGitSnapshot(payload.cwd);

@@ -28,6 +28,7 @@ type PatchPayload = {
   readFiles?: string[];
   writeFiles?: WriteFileSpec[];
   commands?: PowerShellCommandSpec[];
+  continueOnError?: boolean;
   buildCommand?: PowerShellCommandSpec;
   createBackups?: boolean;
   allowDangerousCommands?: boolean;
@@ -273,7 +274,30 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     }
   }
 
+  let commandChainFailed = false;
+
   for (const commandSpec of payload.commands ?? []) {
+    if (
+      commandChainFailed &&
+      payload.continueOnError !== true &&
+      commandSpec.runAfterFailure !== true
+    ) {
+      const timestamp = new Date().toISOString();
+      commands.push({
+        command: commandSpec.command,
+        args: commandSpec.args ?? [],
+        ok: false,
+        blocked: true,
+        skipped: true,
+        stdout: "",
+        stderr: "",
+        error: "Skipped because a previous command failed",
+        startedAt: timestamp,
+        finishedAt: timestamp,
+      });
+      continue;
+    }
+
     const result = await runCommand(
       commandSpec,
       cwd,
@@ -282,20 +306,42 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     commands.push(result);
 
     if (!result.ok) {
+      commandChainFailed = true;
       errors.push(formatCompactCommandFailure(result));
     }
   }
 
   let build = null;
   if (payload.buildCommand) {
-    build = await runCommand(
-      payload.buildCommand,
-      cwd,
-      allowDangerousCommands,
-    );
+    if (
+      commandChainFailed &&
+      payload.continueOnError !== true &&
+      payload.buildCommand.runAfterFailure !== true
+    ) {
+      const timestamp = new Date().toISOString();
+      build = {
+        command: payload.buildCommand.command,
+        args: payload.buildCommand.args ?? [],
+        ok: false,
+        blocked: true,
+        skipped: true,
+        stdout: "",
+        stderr: "",
+        error: "Skipped because a previous command failed",
+        startedAt: timestamp,
+        finishedAt: timestamp,
+      };
+    } else {
+      build = await runCommand(
+        payload.buildCommand,
+        cwd,
+        allowDangerousCommands,
+      );
 
-    if (!build.ok) {
-      errors.push(formatCompactCommandFailure(build, "build"));
+      if (!build.ok) {
+        commandChainFailed = true;
+        errors.push(formatCompactCommandFailure(build, "build"));
+      }
     }
   }
 

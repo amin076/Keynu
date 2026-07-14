@@ -3,6 +3,7 @@ export type CommandSpec = {
   args?: string[];
   cwd?: string;
   timeoutMs?: number;
+  runAfterFailure?: boolean;
 };
 
 export function isCommandSpec(value: unknown): value is CommandSpec {
