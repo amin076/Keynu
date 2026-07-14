@@ -107,4 +107,13 @@ assert(client.includes('removeEventListener("click", graph3DPreviousHandler)'));
 assert(client.includes('removeEventListener("click", graph3DNextHandler)'));
 assert(client.includes('graph3DPage = 1'));
 
+assert(html.includes('id="graph3dResultRange"'));
+assert(client.includes('total?: number'));
+assert(client.includes('hasPrevious?: boolean'));
+assert(client.includes('hasNext?: boolean'));
+assert(client.includes('graph3dResultRange'));
+assert(client.includes('totalPages'));
+assert(client.includes('previousButton?.toggleAttribute("disabled"'));
+assert(client.includes('nextButton?.toggleAttribute("disabled"'));
+
 console.log("Graph 3D Dashboard tests passed.");

@@ -149,6 +149,25 @@ try {
   };
   assert((jobFilter.items ?? []).every((node) => node.kind === "job"));
 
+  const paginationMetadataResponse = await fetch(
+    handle.url + "/api/graph/effective/nodes?limit=1&offset=1",
+    { cache: "no-store" },
+  );
+  assert.equal(paginationMetadataResponse.status, 200);
+  const paginationMetadata = await paginationMetadataResponse.json() as {
+    items?: unknown[];
+    total?: number;
+    limit?: number;
+    offset?: number;
+    hasPrevious?: boolean;
+    hasNext?: boolean;
+  };
+  assert.equal(typeof paginationMetadata.total, "number");
+  assert.equal(paginationMetadata.limit, 1);
+  assert.equal(paginationMetadata.offset, 1);
+  assert.equal(paginationMetadata.hasPrevious, true);
+  assert.equal(typeof paginationMetadata.hasNext, "boolean");
+
 } finally {
   await handle.close();
   rmSync(root, { recursive: true, force: true });

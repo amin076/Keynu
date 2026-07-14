@@ -5,6 +5,11 @@ import type { Graph3DEdge, Graph3DNode } from "./Graph3DTypes.js";
 type GraphResponse<T> = {
   ok?: boolean;
   items?: T[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 };
 
 const NODE_LIMIT = 140;
@@ -195,6 +200,13 @@ function positionNodes(nodes: Graph3DNode[]): Map<string, THREE.Vector3> {
 async function readGraphData(search = "", kind = "", page = 1): Promise<{
   nodes: Graph3DNode[];
   edges: Graph3DEdge[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasPrevious: boolean;
+    hasNext: boolean;
+  };
 }> {
   const nodeQuery = new URLSearchParams({
     limit: String(NODE_LIMIT),
@@ -222,6 +234,13 @@ async function readGraphData(search = "", kind = "", page = 1): Promise<{
   return {
     nodes: nodeData.items ?? [],
     edges: edgeData.items ?? [],
+    pagination: {
+      total: nodeData.total ?? nodeData.items?.length ?? 0,
+      limit: nodeData.limit ?? NODE_LIMIT,
+      offset: nodeData.offset ?? Math.max(0, page - 1) * NODE_LIMIT,
+      hasPrevious: nodeData.hasPrevious ?? page > 1,
+      hasNext: nodeData.hasNext ?? (nodeData.items?.length ?? 0) >= NODE_LIMIT,
+    },
   };
 }
 
@@ -383,7 +402,14 @@ export async function startGraph3D(): Promise<void> {
   setGraph3DText("graph3dLoadedNodes", graph.nodes.length);
   setGraph3DText("graph3dLoadedEdges", graph.edges.length);
   setGraph3DText("graph3dPageNumber", graph3DPage);
-  setGraph3DText("graph3dPageStatus", `Page ${graph3DPage}`);
+  const totalPages = Math.max(1, Math.ceil(graph.pagination.total / Math.max(1, graph.pagination.limit)));
+  const rangeStart = graph.nodes.length ? graph.pagination.offset + 1 : 0;
+  const rangeEnd = graph.pagination.offset + graph.nodes.length;
+  setGraph3DText("graph3dPageStatus", `Page ${graph3DPage} of ${totalPages}`);
+  setGraph3DText(
+    "graph3dResultRange",
+    `${rangeStart}-${rangeEnd} of ${graph.pagination.total} nodes`,
+  );
 
   renderer.domElement.addEventListener("dblclick", () => {
     selectedMesh = null;
@@ -498,10 +524,11 @@ export async function startGraph3D(): Promise<void> {
     previousButton.removeEventListener("click", graph3DPreviousHandler);
   }
   graph3DPreviousHandler = () => {
-    if (graph3DPage <= 1) return;
+    if (!graph.pagination.hasPrevious) return;
     graph3DPage -= 1;
     graph3DReloadHandler?.();
   };
+  previousButton?.toggleAttribute("disabled", !graph.pagination.hasPrevious);
   previousButton?.addEventListener("click", graph3DPreviousHandler);
 
   const nextButton = document.getElementById("graph3dNext");
@@ -509,10 +536,11 @@ export async function startGraph3D(): Promise<void> {
     nextButton.removeEventListener("click", graph3DNextHandler);
   }
   graph3DNextHandler = () => {
-    if (graph.nodes.length < NODE_LIMIT) return;
+    if (!graph.pagination.hasNext) return;
     graph3DPage += 1;
     graph3DReloadHandler?.();
   };
+  nextButton?.toggleAttribute("disabled", !graph.pagination.hasNext);
   nextButton?.addEventListener("click", graph3DNextHandler);
 
   window.addEventListener("resize", resize);

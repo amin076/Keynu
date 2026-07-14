@@ -65,21 +65,30 @@ export class EffectiveGraphQueryService {
   }
 
   queryNodes(options: EffectiveGraphQueryOptions = {}) {
-    const offset = normalizeInteger(options.offset, 0, Number.MAX_SAFE_INTEGER);
+    const offset = normalizeInteger(
+      options.offset,
+      0,
+      Number.MAX_SAFE_INTEGER,
+    );
     const limit = normalizeInteger(options.limit, 100, 500);
     const search = options.search?.trim().toLowerCase();
 
-    const items = this.getProjection().snapshot.nodes.filter((node) =>
+    const filteredItems = this.getProjection().snapshot.nodes.filter((node) =>
       (!options.kind || node.kind === options.kind) &&
       (!options.state || node.state === options.state) &&
       (!search || this.matchesNode(node, search))
     );
 
+    const total = filteredItems.length;
+    const items = filteredItems.slice(offset, offset + limit);
+
     return {
-      total: items.length,
+      items,
+      total,
       offset,
       limit,
-      items: items.slice(offset, offset + limit),
+      hasPrevious: offset > 0,
+      hasNext: offset + items.length < total,
     };
   }
 
