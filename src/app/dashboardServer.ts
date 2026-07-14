@@ -76,6 +76,14 @@ function sendHtml(response: ServerResponse, statusCode: number, body: string): v
   response.end(body);
 }
 
+function sendJavaScript(response: ServerResponse, statusCode: number, body: string): void {
+  response.writeHead(statusCode, {
+    "content-type": "text/javascript; charset=utf-8",
+    "cache-control": "no-store",
+  });
+  response.end(body);
+}
+
 function getPath(request: IncomingMessage): string {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   return url.pathname;
@@ -231,6 +239,16 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
 
       if (path === "/") {
         sendHtml(response, 200, renderDashboardHtml());
+        return;
+      }
+
+      if (path === "/assets/graph3dClient.js") {
+        const clientPath = join(process.cwd(), "dist", "app", "public", "graph3dClient.js");
+        if (!existsSync(clientPath)) {
+          sendJson(response, 404, { ok: false, error: "Graph 3D client bundle is missing" });
+          return;
+        }
+        sendJavaScript(response, 200, readFileSync(clientPath, "utf8"));
         return;
       }
 
