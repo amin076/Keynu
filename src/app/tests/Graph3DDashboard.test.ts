@@ -58,4 +58,20 @@ assert(client.includes('material.color.setHex'));
 assert(client.includes('connected ? 0x22d3ee : 0x64748b'));
 assert(client.includes('connected ? 0.95 : 0.05'));
 
+assert(html.includes('id="graph3dSearch"'));
+assert(html.includes('id="graph3dKind"'));
+assert(html.includes('id="graph3dReload"'));
+assert(client.includes('new URLSearchParams'));
+assert(client.includes('nodeQuery.set("search", search)'));
+assert(client.includes('nodeQuery.set("kind", kind)'));
+assert(client.includes('graph3dSearch'));
+assert(client.includes('graph3dKind'));
+
+assert(!client.includes('window.location.reload()'));
+assert(client.includes('activeGraph3DCleanup'));
+assert(client.includes('controls.dispose()'));
+assert(client.includes('renderer.dispose()'));
+assert(client.includes('cancelAnimationFrame'));
+assert(client.includes('startGraph3D().catch'));
+
 console.log("Graph 3D Dashboard tests passed.");

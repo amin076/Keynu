@@ -10,6 +10,8 @@ type GraphResponse<T> = {
 const NODE_LIMIT = 140;
 const EDGE_LIMIT = 320;
 
+let activeGraph3DCleanup: (() => void) | null = null;
+
 type Graph3DEdgeRenderRecord = {
   edge: Graph3DEdge;
   line: THREE.Line;
@@ -183,12 +185,16 @@ function positionNodes(nodes: Graph3DNode[]): Map<string, THREE.Vector3> {
   return positions;
 }
 
-async function readGraphData(): Promise<{
+async function readGraphData(search = "", kind = ""): Promise<{
   nodes: Graph3DNode[];
   edges: Graph3DEdge[];
 }> {
+  const nodeQuery = new URLSearchParams({ limit: String(NODE_LIMIT) });
+  if (search) nodeQuery.set("search", search);
+  if (kind) nodeQuery.set("kind", kind);
+
   const [nodeResponse, edgeResponse] = await Promise.all([
-    fetch(`/api/graph/effective/nodes?limit=${NODE_LIMIT}`, {
+    fetch(`/api/graph/effective/nodes?${nodeQuery.toString()}`, {
       cache: "no-store",
     }),
     fetch(`/api/graph/effective/edges?limit=${EDGE_LIMIT}`, {
@@ -292,6 +298,9 @@ function createEdgeLines(
 }
 
 export async function startGraph3D(): Promise<void> {
+  activeGraph3DCleanup?.();
+  activeGraph3DCleanup = null;
+
   const container = document.getElementById("graph3dCanvas");
   const status = document.getElementById("graph3dStatus");
   if (!container) return;
@@ -324,7 +333,9 @@ export async function startGraph3D(): Promise<void> {
   directional.position.set(8, 14, 10);
   scene.add(directional);
 
-  const graph = await readGraphData();
+  const searchInput = document.getElementById("graph3dSearch") as HTMLInputElement | null;
+  const kindSelect = document.getElementById("graph3dKind") as HTMLSelectElement | null;
+  const graph = await readGraphData(searchInput?.value.trim() ?? "", kindSelect?.value ?? "");
   const positions = positionNodes(graph.nodes);
   const graphGroup = new THREE.Group();
   const nodeMeshes: THREE.Mesh[] = [];
@@ -402,11 +413,36 @@ export async function startGraph3D(): Promise<void> {
     renderer.setSize(width, height, false);
   };
 
+  let animationFrame = 0;
   const animate = () => {
     controls.update();
     renderer.render(scene, camera);
-    requestAnimationFrame(animate);
+    animationFrame = requestAnimationFrame(animate);
   };
+
+  activeGraph3DCleanup = () => {
+    cancelAnimationFrame(animationFrame);
+    window.removeEventListener("resize", resize);
+    controls.dispose();
+    renderer.dispose();
+    graphGroup.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+        object.geometry.dispose();
+        const material = object.material;
+        if (Array.isArray(material)) material.forEach((item) => item.dispose());
+        else material.dispose();
+      }
+    });
+  };
+
+  document.getElementById("graph3dReload")?.addEventListener("click", () => {
+    startGraph3D().catch((error) => {
+      setGraph3DText(
+        "graph3dStatus",
+        error instanceof Error ? error.message : "Graph 3D reload failed",
+      );
+    });
+  });
 
   window.addEventListener("resize", resize);
   resize();
