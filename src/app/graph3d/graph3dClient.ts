@@ -10,6 +10,53 @@ type GraphResponse<T> = {
 const NODE_LIMIT = 140;
 const EDGE_LIMIT = 320;
 
+function setGraph3DText(id: string, value: unknown): void {
+  const element = document.getElementById(id);
+  if (element) element.textContent = String(value ?? "--");
+}
+
+function escapeGraph3DHtml(value: unknown): string {
+  return String(value ?? "--").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] ?? character);
+}
+
+async function showNodeIntelligence(node: Graph3DNode): Promise<void> {
+  setGraph3DText("graph3dSelected", node.path ?? node.label);
+  setGraph3DText("graph3dSelectedKind", node.kind);
+  setGraph3DText("graph3dSelectedState", node.state);
+
+  const response = await fetch(
+    "/api/graph/effective/neighbors?nodeId=" + encodeURIComponent(node.id) + "&depth=1",
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) throw new Error("Unable to load selected-node neighbors");
+
+  const result = await response.json() as { nodes?: Graph3DNode[] };
+  const neighbors = result.nodes ?? [];
+  setGraph3DText("graph3dSelectedNeighbors", neighbors.length);
+
+  const related = document.getElementById("graph3dRelated");
+  if (related) {
+    related.innerHTML = neighbors.length
+      ? neighbors.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.kind) +
+          "</strong> — " +
+          escapeGraph3DHtml(item.path ?? item.label) +
+          " — " +
+          escapeGraph3DHtml(item.state) +
+          "</div>",
+        ).join("")
+      : '<div class="logline">No neighboring nodes</div>';
+  }
+}
+
 function colorForNode(node: Graph3DNode): number {
   if (node.state === "failed") return 0xfb7185;
   if (node.state === "active" || node.state === "queued") return 0xf59e0b;
@@ -165,10 +212,15 @@ export async function startGraph3D(): Promise<void> {
   const graph = await readGraphData();
   const positions = positionNodes(graph.nodes);
   const graphGroup = new THREE.Group();
+  const nodeMeshes: THREE.Mesh[] = [];
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let selectedMesh: THREE.Mesh | null = null;
 
   for (const node of graph.nodes) {
     const mesh = createNodeMesh(node);
     mesh.position.copy(positions.get(node.id) ?? new THREE.Vector3());
+    nodeMeshes.push(mesh);
     graphGroup.add(mesh);
   }
 
@@ -179,6 +231,38 @@ export async function startGraph3D(): Promise<void> {
     status.textContent =
       `Three.js connected — ${graph.nodes.length} nodes and ${graph.edges.length} edges loaded`;
   }
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    const bounds = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(nodeMeshes, false)[0];
+    if (!hit) return;
+
+    if (selectedMesh) {
+      selectedMesh.scale.setScalar(1);
+      const previousMaterial = selectedMesh.material as THREE.MeshStandardMaterial;
+      previousMaterial.emissiveIntensity =
+        selectedMesh.userData.graphNode?.state === "active" ? 0.55 : 0.16;
+    }
+
+    selectedMesh = hit.object as THREE.Mesh;
+    selectedMesh.scale.setScalar(1.65);
+    const selectedMaterial = selectedMesh.material as THREE.MeshStandardMaterial;
+    selectedMaterial.emissiveIntensity = 1;
+
+    const node = selectedMesh.userData.graphNode as Graph3DNode | undefined;
+    if (node) {
+      showNodeIntelligence(node).catch((error) => {
+        setGraph3DText(
+          "graph3dSelected",
+          error instanceof Error ? error.message : "Node selection failed",
+        );
+      });
+    }
+  });
 
   const resize = () => {
     const width = Math.max(1, container.clientWidth);

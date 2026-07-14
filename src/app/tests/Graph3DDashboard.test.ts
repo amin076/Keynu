@@ -24,4 +24,14 @@ assert(client.includes('createNodeMesh'));
 assert(client.includes('createEdgeLines'));
 assert(client.includes('Three.js connected'));
 
+assert(html.includes('id="graph3dSelected"'));
+assert(html.includes('id="graph3dSelectedKind"'));
+assert(html.includes('id="graph3dSelectedState"'));
+assert(html.includes('id="graph3dSelectedNeighbors"'));
+assert(client.includes('new THREE.Raycaster'));
+assert(client.includes('pointerdown'));
+assert(client.includes('showNodeIntelligence'));
+assert(client.includes('/api/graph/effective/neighbors'));
+assert(client.includes('intersectObjects'));
+
 console.log("Graph 3D Dashboard tests passed.");
