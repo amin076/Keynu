@@ -117,9 +117,30 @@ export class MissionManager {
   }
 
   acknowledge(acknowledgement: MissionAckPayload): MissionRuntimeState {
-    const { projectId, missionId, status, understoodMilestone } =
-      acknowledgement.payload;
+    const {
+      projectId,
+      missionId,
+      acknowledgedBootstrapId,
+      acknowledgedMemoryRevision,
+      status,
+      understoodMilestone,
+    } = acknowledgement.payload;
     const selection = this.registry.getActiveMission(projectId);
+    const runtimeState = this.stateStore.getMission(missionId);
+
+    if (!runtimeState) {
+      throw new Error(`Mission runtime state '${missionId}' was not found.`);
+    }
+
+    if (runtimeState.lastBootstrapId !== acknowledgedBootstrapId) {
+      this.stateStore.recordAcknowledgement(missionId, false);
+      throw new Error("Acknowledgement bootstrap ID does not match the active bootstrap.");
+    }
+
+    if (runtimeState.lastBootstrapMemoryRevision !== acknowledgedMemoryRevision) {
+      this.stateStore.recordAcknowledgement(missionId, false);
+      throw new Error("Acknowledgement memory revision does not match the active bootstrap.");
+    }
 
     if (selection.mission.id !== missionId) {
       throw new Error(
@@ -140,6 +161,8 @@ export class MissionManager {
     return this.stateStore.recordAcknowledgement(
       missionId,
       status === "ACCEPTED",
+      acknowledgedBootstrapId,
+      acknowledgedMemoryRevision,
     );
   }
 

@@ -149,6 +149,13 @@ function backupPath(cwd: string, filePath: string) {
   );
 }
 
+function formatCompactCommandFailure(result: { command?: string; blocked?: boolean }, operation = "command"): string {
+  const command = result.command ?? "unknown";
+  return result.blocked
+    ? `${operation} blocked: ${command}`
+    : `${operation} failed: ${command}`;
+}
+
 export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
   const payload = job.payload;
   const cwd = payload.cwd;
@@ -197,6 +204,30 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
         bytes: Buffer.byteLength(file.content),
         backup,
         artifact,
+      });
+
+      const readBackContent = readFileSync(fullPath, "utf8");
+      const maxReportChars = 12000;
+      const readBackReportContent =
+        readBackContent.length > maxReportChars
+          ? readBackContent.slice(0, maxReportChars)
+          : readBackContent;
+      const readBackArtifact = collectArtifactEvidence(fullPath);
+
+      reads.push({
+        path: file.path,
+        ok: true,
+        readBack: true,
+        content:
+          reportMode === "summary" ? undefined : readBackReportContent,
+        preview:
+          reportMode === "summary"
+            ? readBackReportContent.slice(0, 800)
+            : undefined,
+        bytes: Buffer.byteLength(readBackReportContent),
+        truncated: readBackContent.length > maxReportChars,
+        originalBytes: Buffer.byteLength(readBackContent),
+        artifact: readBackArtifact,
       });
     } catch (error: any) {
       writes.push({
@@ -251,12 +282,7 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     commands.push(result);
 
     if (!result.ok) {
-      errors.push(
-        "command failed: " +
-          commandSpec.command +
-          " " +
-          (commandSpec.args ?? []).join(" "),
-      );
+      errors.push(formatCompactCommandFailure(result));
     }
   }
 
@@ -269,12 +295,7 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     );
 
     if (!build.ok) {
-      errors.push(
-        "build failed: " +
-          payload.buildCommand.command +
-          " " +
-          (payload.buildCommand.args ?? []).join(" "),
-      );
+      errors.push(formatCompactCommandFailure(build, "build"));
     }
   }
 

@@ -4,6 +4,7 @@ import type { GraphEdge, GraphNode, GraphSnapshot } from "./GraphTypes.js";
 
 export type ProjectScannerOptions = {
   ignoredDirectories?: string[];
+  ignoredFiles?: string[];
   maximumFiles?: number;
 };
 
@@ -13,6 +14,16 @@ const DEFAULT_IGNORED = [
   "dist",
   "node_modules",
   "runtime-data",
+  "chrome-profile",
+  "coverage",
+];
+
+const DEFAULT_IGNORED_FILES = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+  ".env.test",
 ];
 
 export class ProjectScanner {
@@ -26,6 +37,10 @@ export class ProjectScanner {
     const ignored = new Set([
       ...DEFAULT_IGNORED,
       ...(this.options.ignoredDirectories ?? []),
+    ]);
+    const ignoredFiles = new Set([
+      ...DEFAULT_IGNORED_FILES,
+      ...(this.options.ignoredFiles ?? []),
     ]);
     const maximumFiles = this.options.maximumFiles ?? 5000;
     const nodes: GraphNode[] = [];
@@ -47,6 +62,7 @@ export class ProjectScanner {
 
       for (const entry of entries) {
         if (entry.isDirectory() && ignored.has(entry.name)) continue;
+        if (entry.isFile() && ignoredFiles.has(entry.name)) continue;
         if (fileCount >= maximumFiles) return;
 
         const fullPath = join(directory, entry.name);

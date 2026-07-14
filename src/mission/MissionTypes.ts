@@ -53,15 +53,31 @@ export type MissionRegistryData = {
   projects: MissionProject[];
 };
 
+export type MissionRecoveryTestEvidence = {
+  status: "VERIFIED" | "FAILED";
+  conversationUrl?: string;
+  missionAcknowledged: boolean;
+  acknowledgementId?: string;
+  verifiedReportId?: string;
+  certificateId?: string;
+  recordedAt: string;
+};
+
 export type MissionRuntimeState = {
   missionId: string;
   projectId: string;
   status: MissionStatus;
   lastBootstrapAt?: string;
+  lastBootstrapId?: string;
+  lastBootstrapMemoryRevision?: string;
   lastConversationUrl?: string;
   lastAssistantAcknowledged?: boolean;
+  acknowledgedBootstrapId?: string;
+  acknowledgedMemoryRevision?: string;
+  lastAcknowledgedAt?: string;
   lastJobId?: string;
   currentMilestone?: string;
+  lastRecoveryTest?: MissionRecoveryTestEvidence;
   updatedAt: string;
 };
 
@@ -141,6 +157,8 @@ export type MissionBootstrapPayload = {
   payload: {
     projectId: string;
     missionId: string;
+    bootstrapId: string;
+    memoryRevision: string;
     context: MissionContext;
     validation: MissionValidationResult;
     protocolGuide: {
@@ -170,6 +188,8 @@ export type MissionAckPayload = {
   payload: {
     projectId: string;
     missionId: string;
+    acknowledgedBootstrapId: string;
+    acknowledgedMemoryRevision: string;
     status: "ACCEPTED" | "REJECTED";
     understoodMilestone?: string;
     message?: string;

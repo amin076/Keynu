@@ -8,12 +8,14 @@ import { VerificationReportIntegration } from "../verification/VerificationRepor
 import { MissionManager } from "../mission/MissionManager.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
 import { SessionStore } from "../session/index.js";
+import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
 
 export class BrowserAgent {
   private readonly processedJobIds = new Set<string>();
   private readonly processedMissionAckIds = new Set<string>();
   private readonly verification = new VerificationReportIntegration();
   private readonly missionManager = new MissionManager();
+  private readonly graphTracer = new RuntimeGraphTracer();
 
   constructor(
     private readonly browser: BrowserDriver,
@@ -29,14 +31,13 @@ export class BrowserAgent {
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
 
-      console.log("[agent] Assistant message delivered by watcher.");
-      console.log("[agent] Message length:", messageText.length);
-      console.log(
-        "[agent] Message preview:",
-        JSON.stringify(messageText.slice(0, 500)),
-      );
+      console.log("[agent] Assistant message received.");
 
       const kap = extractKapEnvelope(messageText) as any;
+
+      if (kap?.type === "JOB") {
+        console.log(`[agent] KAP job extracted: ${kap.id}`);
+      }
 
       if (!kap) {
         console.error("[agent] KAP extraction or validation failed.");
@@ -60,12 +61,6 @@ export class BrowserAgent {
           const state = this.missionManager.acknowledge(
             kap as MissionAckPayload,
           );
-
-          new SessionStore().patch({
-            memoryRestored: true,
-            missionAcknowledgedAt: new Date().toISOString(),
-            runtimeState: "idle",
-          });
 
           new SessionStore().patch({
             memoryRestored: true,
@@ -100,8 +95,19 @@ export class BrowserAgent {
 
       this.processedJobIds.add(kap.id);
 
+      const traceContext = {
+        jobId: kap.id,
+        missionId: kap.metadata?.missionId,
+        workflowId: kap.metadata?.workflowId,
+        taskId: kap.id,
+        target: kap.payload?.target,
+      };
+
+      this.graphTracer.traceQueued(traceContext);
+
       try {
         const target = kap.payload?.target;
+        this.graphTracer.traceStarted(traceContext);
 
         if (target === "powershell" || target === "filesystem") {
           const routedReport: any = await routeKapJob(kap);
@@ -146,6 +152,8 @@ export class BrowserAgent {
             error: rawResult.error ?? routedPayload.error,
           };
 
+          this.graphTracer.traceCompleted(traceContext, rawResult);
+
           const verified = this.verification.createVerifiedReport(executionResult);
           const certifiedReport = {
             ...routedReport,
@@ -176,6 +184,15 @@ export class BrowserAgent {
 
         const task = kapJobToTask(kap);
         const result = await this.runtime.execute(task);
+        this.graphTracer.traceCompleted(traceContext, {
+          status: result.status,
+          commands: result.steps.map((step) => ({
+            command: JSON.stringify(step.command),
+            ok: step.status === "COMPLETED",
+            error: step.error,
+          })),
+        });
+
         const verified = this.verification.createVerifiedReport(result);
 
         if (result.status === "COMPLETED") {
@@ -215,6 +232,8 @@ export class BrowserAgent {
           await watcher.markFailed(messageText);
         }
       } catch (error: any) {
+        this.graphTracer.traceFailed(traceContext, error);
+
         await conversation.sendMessage(
           createKapErrorReport(kap.id, error.message ?? String(error), {
             taskId: kap.id,

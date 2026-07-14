@@ -1,6 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { MissionRuntimeState, MissionStatus } from "./MissionTypes.js";
+import type {
+  MissionRecoveryTestEvidence,
+  MissionRuntimeState,
+  MissionStatus,
+} from "./MissionTypes.js";
 
 export type MissionStateStoreData = {
   version: "1.0";
@@ -70,13 +74,11 @@ export class MissionStateStore {
     const now = new Date().toISOString();
 
     const missionState: MissionRuntimeState = {
+      ...existing,
       missionId,
       projectId,
       status: existing?.status ?? "READY",
-      lastBootstrapAt: existing?.lastBootstrapAt,
-      lastConversationUrl: existing?.lastConversationUrl,
       lastAssistantAcknowledged: existing?.lastAssistantAcknowledged ?? false,
-      lastJobId: existing?.lastJobId,
       currentMilestone,
       updatedAt: now,
     };
@@ -118,22 +120,34 @@ export class MissionStateStore {
   recordBootstrap(
     missionId: string,
     conversationUrl?: string,
+    bootstrapId?: string,
+    memoryRevision?: string,
   ): MissionRuntimeState {
     return this.updateMission(missionId, {
       status: "BOOTSTRAP_SENT",
       lastBootstrapAt: new Date().toISOString(),
+      lastBootstrapId: bootstrapId,
+      lastBootstrapMemoryRevision: memoryRevision,
       lastConversationUrl: conversationUrl,
       lastAssistantAcknowledged: false,
+      acknowledgedBootstrapId: undefined,
+      acknowledgedMemoryRevision: undefined,
+      lastAcknowledgedAt: undefined,
     });
   }
 
   recordAcknowledgement(
     missionId: string,
     accepted: boolean,
+    bootstrapId?: string,
+    memoryRevision?: string,
   ): MissionRuntimeState {
     return this.updateMission(missionId, {
       status: accepted ? "ACKNOWLEDGED" : "BLOCKED",
       lastAssistantAcknowledged: accepted,
+      acknowledgedBootstrapId: accepted ? bootstrapId : undefined,
+      acknowledgedMemoryRevision: accepted ? memoryRevision : undefined,
+      lastAcknowledgedAt: accepted ? new Date().toISOString() : undefined,
     });
   }
 
@@ -142,5 +156,12 @@ export class MissionStateStore {
       lastJobId: jobId,
       status: "ACTIVE",
     });
+  }
+
+  recordRecoveryTest(
+    missionId: string,
+    evidence: MissionRecoveryTestEvidence,
+  ): MissionRuntimeState {
+    return this.updateMission(missionId, { lastRecoveryTest: evidence });
   }
 }

@@ -7,6 +7,9 @@ export type GraphNodeKind =
   | "class"
   | "service"
   | "driver"
+  | "job"
+  | "command"
+  | "report"
   | "runtime-step";
 
 export type GraphEdgeKind =
@@ -68,6 +71,11 @@ export type GraphEventType =
 export type GraphEvent = {
   id: string;
   jobId?: string;
+  missionId?: string;
+  workflowId?: string;
+  taskId?: string;
+  stepIndex?: number;
+  driverId?: string;
   type: GraphEventType;
   nodeId?: string;
   edgeId?: string;

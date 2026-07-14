@@ -1,6 +1,13 @@
 import { collectGitSnapshot, readPowerShellFile, runPowerShellCommand, writePowerShellFile } from "./powershell-runner.js";
 import type { PowerShellFileOpsJobPayload } from "./powershell-types.js";
 
+function formatCompactCommandFailure(result: { command?: string; blocked?: boolean }): string {
+  const command = result.command || "unknown";
+  return result.blocked
+    ? `command blocked: ${command}`
+    : `command failed: ${command}`;
+}
+
 export async function runPowerShellFileOps(jobId: string, payload: PowerShellFileOpsJobPayload) {
   const startedAt = new Date().toISOString();
   const errors: string[] = [];
@@ -27,7 +34,7 @@ export async function runPowerShellFileOps(jobId: string, payload: PowerShellFil
   for (const command of payload.commands ?? []) {
     const result = await runPowerShellCommand(payload.cwd, command);
     commands.push(result);
-    if (!result.ok) errors.push(`command failed: ${result.command} ${result.args.join(" ")}`.trim());
+    if (!result.ok) errors.push(formatCompactCommandFailure(result));
   }
 
   const git = payload.includeGit === false ? null : await collectGitSnapshot(payload.cwd);

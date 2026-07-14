@@ -2,6 +2,7 @@ import { ContextAssembler } from "./ContextAssembler.js";
 import { ContextBudgeter } from "./ContextBudgeter.js";
 import { MissionStateStore } from "./MissionStateStore.js";
 import { MissionValidator } from "./MissionValidator.js";
+import { MemoryRevisionCalculator } from "./MemoryRevisionCalculator.js";
 import type { MissionBootstrapPayload } from "./MissionTypes.js";
 
 export type BootstrapBuilderOptions = {
@@ -15,12 +16,14 @@ export class BootstrapBuilder {
     private readonly contextBudgeter = new ContextBudgeter(),
     private readonly missionValidator = new MissionValidator(),
     private readonly stateStore = new MissionStateStore(),
+    private readonly memoryRevisionCalculator = new MemoryRevisionCalculator(),
   ) {}
 
   build(options: BootstrapBuilderOptions = {}): MissionBootstrapPayload {
     const assembledContext = this.contextAssembler.assemble(options.projectId);
     const budgetedContext = this.contextBudgeter.apply(assembledContext);
     const validation = this.missionValidator.validate(budgetedContext);
+    const memoryRevision = this.memoryRevisionCalculator.calculate(budgetedContext).revision;
     const createdAt = new Date().toISOString();
     const bootstrapId = [
       "mission-bootstrap",
@@ -38,6 +41,8 @@ export class BootstrapBuilder {
     this.stateStore.recordBootstrap(
       budgetedContext.mission.id,
       options.conversationUrl,
+      bootstrapId,
+      memoryRevision,
     );
 
     return {
@@ -49,6 +54,8 @@ export class BootstrapBuilder {
       payload: {
         projectId: budgetedContext.project.id,
         missionId: budgetedContext.mission.id,
+        bootstrapId,
+        memoryRevision,
         context: budgetedContext,
         validation,
         protocolGuide: {
@@ -79,6 +86,8 @@ export class BootstrapBuilder {
             "createdAt",
             "payload.projectId",
             "payload.missionId",
+            "payload.acknowledgedBootstrapId",
+            "payload.acknowledgedMemoryRevision",
             "payload.status",
             "payload.understoodMilestone",
           ],
@@ -91,6 +100,8 @@ export class BootstrapBuilder {
             payload: {
               projectId: budgetedContext.project.id,
               missionId: budgetedContext.mission.id,
+              acknowledgedBootstrapId: bootstrapId,
+              acknowledgedMemoryRevision: memoryRevision,
               status: "ACCEPTED",
               understoodMilestone:
                 budgetedContext.mission.currentMilestone,

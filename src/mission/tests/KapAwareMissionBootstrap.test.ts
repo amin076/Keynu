@@ -1,11 +1,14 @@
 import { strict as assert } from "node:assert";
-import { MissionManager } from "../MissionManager.js";
+import { createIsolatedMissionManager } from "./createIsolatedMissionManager.js";
 
-const bootstrap = new MissionManager().prepare();
+const fixture = createIsolatedMissionManager();
+const bootstrap = fixture.manager.prepare();
 
 assert.equal(bootstrap.protocol, "KAP");
 assert.equal(bootstrap.version, "1.0");
 assert.equal(bootstrap.type, "MISSION_BOOTSTRAP");
+assert.equal(bootstrap.payload.bootstrapId, bootstrap.id);
+assert.equal(bootstrap.payload.memoryRevision.length, 64);
 assert.equal(bootstrap.payload.protocolGuide.abbreviation, "KAP");
 assert.equal(bootstrap.payload.protocolGuide.version, "1.0");
 assert.equal(
@@ -39,8 +42,17 @@ assert.equal(
   bootstrap.payload.missionId,
 );
 assert.equal(
+  bootstrap.payload.requiredResponse.example.payload.acknowledgedBootstrapId,
+  bootstrap.payload.bootstrapId,
+);
+assert.equal(
+  bootstrap.payload.requiredResponse.example.payload.acknowledgedMemoryRevision,
+  bootstrap.payload.memoryRevision,
+);
+assert.equal(
   bootstrap.payload.requiredResponse.example.payload.status,
   "ACCEPTED",
 );
 
+fixture.dispose();
 console.log("KAP-aware mission bootstrap tests passed.");

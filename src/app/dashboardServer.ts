@@ -1,4 +1,4 @@
-﻿import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+﻿import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { renderDashboardHtml } from "./dashboardHtml.js";
@@ -7,11 +7,26 @@ import { getDashboardBrowser, getDashboardRuntime, readDashboardSession } from "
 import type { Capability } from "../core/CapabilityRegistry.js";
 import type { DriverManager } from "../core/DriverManager.js";
 import { handleProcessManagerPayload } from "../drivers/powershell/process-manager/process-manager-adapter.js";
+import { MissionManager } from "../mission/MissionManager.js";
+import { GraphQueryService } from "../graph/GraphQueryService.js";
+import { GraphEventStore } from "../graph/GraphEventStore.js";
+import { EffectiveGraphQueryService } from "../graph/EffectiveGraphQueryService.js";
+export type DashboardServerHandle = {
+  server: Server;
+  host: string;
+  port: number;
+  url: string;
+  close(): Promise<void>;
+};
+
 
 export type DashboardServerOptions = {
   driverManager: DriverManager;
   capabilities: Capability[];
   port?: number;
+  graphQueryService?: GraphQueryService;
+  graphEventStore?: GraphEventStore;
+  effectiveGraphQueryService?: EffectiveGraphQueryService;
 };
 
 type JsonValue = Record<string, unknown> | unknown[];
@@ -187,10 +202,14 @@ function getDriverStatuses(drivers: string[]) {
   ];
 }
 
-export async function startDashboardServer(options: DashboardServerOptions): Promise<void> {
+export async function startDashboardServer(options: DashboardServerOptions): Promise<DashboardServerHandle | null> {
   const port = options.port ?? Number(process.env.KEYNU_DASHBOARD_PORT ?? 4777);
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
+  const missionManager = new MissionManager();
+  const graphQueryService = options.graphQueryService ?? new GraphQueryService();
+  const graphEventStore = options.graphEventStore ?? new GraphEventStore();
+  const effectiveGraphQueryService = options.effectiveGraphQueryService ?? new EffectiveGraphQueryService();
 
   pushEvent("dashboard", "Dashboard server boot requested");
 
@@ -217,6 +236,157 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
         return;
       }
 
+      if (path === "/api/graph/effective/summary") {
+        sendJson(response, 200, { ok: true, graph: effectiveGraphQueryService.getSummary() });
+        return;
+      }
+
+      if (path === "/api/graph/effective/node") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const nodeId = requestUrl.searchParams.get("nodeId")?.trim();
+        if (!nodeId) {
+          sendJson(response, 400, { ok: false, error: "nodeId is required" });
+          return;
+        }
+        const node = effectiveGraphQueryService.getNode(nodeId);
+        sendJson(response, node ? 200 : 404, {
+          ok: Boolean(node),
+          node,
+          error: node ? undefined : "Graph node not found",
+        });
+        return;
+      }
+
+      if (path === "/api/graph/effective/neighbors") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const nodeId = requestUrl.searchParams.get("nodeId")?.trim();
+        if (!nodeId) {
+          sendJson(response, 400, { ok: false, error: "nodeId is required" });
+          return;
+        }
+        const result = effectiveGraphQueryService.queryNeighbors(
+          nodeId,
+          Number(requestUrl.searchParams.get("depth") ?? 1),
+        );
+        sendJson(response, result.node ? 200 : 404, {
+          ok: Boolean(result.node),
+          ...result,
+          error: result.node ? undefined : "Graph node not found",
+        });
+        return;
+      }
+
+      if (path === "/api/graph/effective/impact") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const nodeId = requestUrl.searchParams.get("nodeId")?.trim();
+        if (!nodeId) {
+          sendJson(response, 400, { ok: false, error: "nodeId is required" });
+          return;
+        }
+        const result = effectiveGraphQueryService.queryImpact(
+          nodeId,
+          Number(requestUrl.searchParams.get("depth") ?? 3),
+        );
+        sendJson(response, result.node ? 200 : 404, {
+          ok: Boolean(result.node),
+          ...result,
+          error: result.node ? undefined : "Graph node not found",
+        });
+        return;
+      }
+
+      if (path === "/api/graph/effective/activity") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const items = effectiveGraphQueryService.queryRecentActivity(
+          Number(requestUrl.searchParams.get("limit") ?? 50),
+        );
+        sendJson(response, 200, {
+          ok: true,
+          total: items.length,
+          items,
+        });
+        return;
+      }
+
+      if (path === "/api/graph/effective/nodes") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const result = effectiveGraphQueryService.queryNodes({
+          search: requestUrl.searchParams.get("search") ?? undefined,
+          kind: requestUrl.searchParams.get("kind") ?? undefined,
+          state: requestUrl.searchParams.get("state") ?? undefined,
+          offset: Number(requestUrl.searchParams.get("offset") ?? 0),
+          limit: Number(requestUrl.searchParams.get("limit") ?? 100),
+        });
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (path === "/api/graph/effective/edges") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const result = effectiveGraphQueryService.queryEdges({
+          search: requestUrl.searchParams.get("search") ?? undefined,
+          kind: requestUrl.searchParams.get("kind") ?? undefined,
+          state: requestUrl.searchParams.get("state") ?? undefined,
+          offset: Number(requestUrl.searchParams.get("offset") ?? 0),
+          limit: Number(requestUrl.searchParams.get("limit") ?? 100),
+        });
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (path === "/api/graph/events/summary") {
+        sendJson(response, 200, { ok: true, events: graphEventStore.getSummary() });
+        return;
+      }
+
+      if (path === "/api/graph/events") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const result = graphEventStore.query({
+          jobId: requestUrl.searchParams.get("jobId") ?? undefined,
+          missionId: requestUrl.searchParams.get("missionId") ?? undefined,
+          workflowId: requestUrl.searchParams.get("workflowId") ?? undefined,
+          taskId: requestUrl.searchParams.get("taskId") ?? undefined,
+          type: requestUrl.searchParams.get("type") as any ?? undefined,
+          nodeId: requestUrl.searchParams.get("nodeId") ?? undefined,
+          edgeId: requestUrl.searchParams.get("edgeId") ?? undefined,
+          offset: Number(requestUrl.searchParams.get("offset") ?? 0),
+          limit: Number(requestUrl.searchParams.get("limit") ?? 100),
+        });
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (path === "/api/graph/summary") {
+        sendJson(response, 200, { ok: true, graph: graphQueryService.getSummary() });
+        return;
+      }
+
+      if (path === "/api/graph/nodes") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const result = graphQueryService.queryNodes({
+          nodeKind: requestUrl.searchParams.get("kind") ?? undefined,
+          nodeState: requestUrl.searchParams.get("state") ?? undefined,
+          search: requestUrl.searchParams.get("search") ?? undefined,
+          offset: Number(requestUrl.searchParams.get("offset") ?? 0),
+          limit: Number(requestUrl.searchParams.get("limit") ?? 100),
+        });
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (path === "/api/graph/edges") {
+        const requestUrl = new URL(request.url ?? path, "http://127.0.0.1");
+        const result = graphQueryService.queryEdges({
+          edgeKind: requestUrl.searchParams.get("kind") ?? undefined,
+          edgeState: requestUrl.searchParams.get("state") ?? undefined,
+          search: requestUrl.searchParams.get("search") ?? undefined,
+          offset: Number(requestUrl.searchParams.get("offset") ?? 0),
+          limit: Number(requestUrl.searchParams.get("limit") ?? 100),
+        });
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
       if (path === "/api/history") {
         const history = getHistorySnapshot();
         sendJson(response, 200, { ok: true, ...history });
@@ -240,6 +410,7 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
         const session = readDashboardSession();
         const dashboardRuntime = getDashboardRuntime(session);
         const dashboardBrowser = getDashboardBrowser(session);
+        const mission = missionManager.getStatus();
 
         sendJson(response, 200, {
           ok: true,
@@ -251,6 +422,7 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
             ...dashboardRuntime,
           },
           browser: dashboardBrowser,
+          mission,
           session,
           drivers,
           driverStatuses,
@@ -299,14 +471,34 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
     if (isPortInUseError(error)) {
       console.log(`Dashboard already running on http://127.0.0.1:${port}`);
       console.log("Keynu will continue without starting a second dashboard server.");
-      return;
+      return null;
     }
     throw error;
   }
 
-  pushEvent("dashboard", `Dashboard listening on port ${port}`);
-  console.log(`Dashboard UI: http://127.0.0.1:${port}`);
-  console.log(`Dashboard API: http://127.0.0.1:${port}/api/status`);
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    throw new Error("Dashboard server address is unavailable.");
+  }
+
+  const actualPort = address.port;
+  const host = "127.0.0.1";
+  const url = `http://${host}:${actualPort}`;
+
+  pushEvent("dashboard", `Dashboard listening on port ${actualPort}`);
+  console.log(`Dashboard UI: ${url}`);
+  console.log(`Dashboard API: ${url}/api/status`);
+
+  return {
+    server,
+    host,
+    port: actualPort,
+    url,
+    close: () => new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    }),
+  };
 }
 
 
