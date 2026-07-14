@@ -6,6 +6,7 @@ import { kapJobToTask } from "../kap/KapTaskAdapter.js";
 import { BrowserDriver } from "./BrowserDriver.js";
 import { VerificationReportIntegration } from "../verification/VerificationReportIntegration.js";
 import { MissionManager } from "../mission/MissionManager.js";
+import { BrowserContinuationCoordinator } from "../mission/BrowserContinuationCoordinator.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
 import { SessionStore } from "../session/index.js";
 import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
@@ -16,6 +17,7 @@ export class BrowserAgent {
   private readonly processedMissionAckIds = new Set<string>();
   private readonly verification = new VerificationReportIntegration();
   private readonly missionManager = new MissionManager();
+  private readonly continuationCoordinator = new BrowserContinuationCoordinator();
   private readonly graphTracer = new RuntimeGraphTracer();
 
   constructor(
@@ -173,6 +175,49 @@ export class BrowserAgent {
 
           if (status === "COMPLETED") {
             this.missionManager.recordJob(kap.id);
+
+            try {
+              const missionStatus = this.missionManager.getStatus();
+              const missionId =
+                kap.metadata?.missionId ||
+                missionStatus?.missionId ||
+                'keynu-active-mission';
+
+              const continuationResult =
+                await this.continuationCoordinator.continueAfterReport(
+                  {
+                    missionId,
+                    missionTitle: missionStatus?.title,
+                    jobId: kap.id,
+                    reportStatus:
+                      certifiedReport?.payload?.status ||
+                      routedPayload?.status ||
+                      rawResult?.status ||
+                      'UNKNOWN',
+                    nextAction:
+                      missionStatus?.openTasks?.[0] ||
+                      'generate_next_safe_verifiable_kap_job',
+                    autonomousStepCount: 0,
+                    maxAutonomousSteps: 12,
+                  },
+                  async (message) => {
+                    await conversation.sendMessage(message);
+                  },
+                );
+
+              console.log(
+                '[agent] Continuation request result:',
+                continuationResult.deliveryStatus,
+                continuationResult.requestId,
+);
+            } catch (continuationError) {
+              console.error(
+                '[agent] Continuation coordination failed:',
+                continuationError instanceof Error
+                  ? continuationError.message
+                  : String(continuationError),
+);
+            }
             await watcher.markReported(messageText);
           } else {
             await watcher.markFailed(messageText);
