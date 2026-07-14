@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { CommandSpec } from './CommandSpec.js';
 import type { CommandExecutionResult } from './CommandExecutionResult.js';
 import { validateCommandSafety } from './CommandSafety.js';
+import { createTemporaryScript, isScriptRuntime, removeTemporaryScript } from './ScriptRunner.js';
 
 function normalizeWindowsCommand(command: string): string {
   if (process.platform !== 'win32') return command;
@@ -21,6 +22,58 @@ export async function executeCommand(
   spec: CommandSpec,
   defaultCwd: string,
 ): Promise<CommandExecutionResult> {
+  if (spec.command === 'script') {
+    if (!isScriptRuntime(spec.runtime)) {
+      throw new Error(
+        'Script command requires runtime: node, powershell, python, or bash.',
+      );
+    }
+
+    if (typeof spec.script !== 'string' || spec.script.trim().length === 0) {
+      throw new Error('Script command requires non-empty script source.');
+    }
+
+    const cwd = spec.cwd || defaultCwd;
+    const temporaryScript = await createTemporaryScript(
+      spec.runtime,
+      spec.script,
+      cwd,
+      spec.cleanup !== false,
+    );
+
+    const runtimeCommand =
+      spec.runtime === 'powershell'
+        ? {
+            command: 'powershell',
+            args: [
+              '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-File',
+              temporaryScript.scriptFile,
+              ...(spec.args || []),
+            ],
+          }
+        : {
+            command: spec.runtime,
+            args: [temporaryScript.scriptFile, ...(spec.args || [])],
+          };
+
+    try {
+      return await executeCommand(
+        {
+          command: runtimeCommand.command,
+          args: runtimeCommand.args,
+          cwd,
+          timeoutMs: spec.timeoutMs,
+          runAfterFailure: spec.runAfterFailure,
+        },
+        defaultCwd,
+      );
+    } finally {
+      await removeTemporaryScript(temporaryScript);
+    }
+  }
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
   const cwd = spec.cwd ?? defaultCwd;

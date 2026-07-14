@@ -4,6 +4,9 @@ export type CommandSpec = {
   cwd?: string;
   timeoutMs?: number;
   runAfterFailure?: boolean;
+  runtime?: 'node' | 'powershell' | 'python' | 'bash';
+  script?: string;
+  cleanup?: boolean;
 };
 
 export function isCommandSpec(value: unknown): value is CommandSpec {
