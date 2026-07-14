@@ -149,11 +149,29 @@ export class OperationalInsightsService {
       .filter((node) => node.state === "failed")
       .sort((a, b) => latestRuntimeTime(b).localeCompare(latestRuntimeTime(a)));
 
+    const failedCommandJobIds = new Set(
+      failedCommands.map((node) => String(node.metadata?.jobId ?? "")),
+    );
+
+    const inconclusiveHistoricalFailures = unresolvedFailedJobs.filter((node) => {
+      const jobId = node.id.replace(/^job:/, "");
+      const hasFailedCommandEvidence = failedCommandJobIds.has(jobId);
+      const hasLaterSuccessfulJob = successfulJobs.some((success) =>
+        isNewer(success, node),
+      );
+
+      return !hasFailedCommandEvidence && hasLaterSuccessfulJob;
+    });
+
+    const actionableUnresolvedFailures = unresolvedFailedJobs.filter(
+      (node) => !inconclusiveHistoricalFailures.includes(node),
+    );
+
     const frequentlyTouchedFiles = this.rankFileActivity(edges, files);
     const highImpactFiles = this.rankHighImpactFiles(files);
     const insights: OperationalInsight[] = [];
 
-    for (const node of unresolvedFailedJobs.slice(0, 10)) {
+    for (const node of actionableUnresolvedFailures.slice(0, 10)) {
       insights.push({
         id: "unresolved-failure:" + node.id,
         category: "unresolved-failure",
@@ -169,6 +187,26 @@ export class OperationalInsightsService {
         },
         recommendedAction:
           "Inspect the associated failed commands and determine whether the failure was superseded, repaired, or still requires action.",
+      });
+    }
+
+    for (const node of inconclusiveHistoricalFailures.slice(0, 10)) {
+      insights.push({
+        id: "historical-failure:" + node.id,
+        category: "historical-failure",
+        severity: "info",
+        title: "Inconclusive historical failure: " + node.label,
+        summary:
+          "The job ended in a failed state, but no failed command evidence is available and later successful runtime activity exists.",
+        evidence: {
+          nodeId: node.id,
+          latestRuntimeEventId: node.metadata?.latestRuntimeEventId,
+          latestRuntimeEventAt: node.metadata?.latestRuntimeEventAt,
+          failedCommandEvidence: false,
+          laterSuccessfulRuntimeActivity: true,
+        },
+        recommendedAction:
+          "Retain this as historical telemetry unless stronger failure evidence is discovered.",
       });
     }
 
@@ -252,14 +290,16 @@ export class OperationalInsightsService {
         commands: commands.length,
         files: files.length,
         failedJobs: failedJobs.length,
-        unresolvedFailedJobs: unresolvedFailedJobs.length,
+        unresolvedFailedJobs: actionableUnresolvedFailures.length,
+        inconclusiveHistoricalFailures: inconclusiveHistoricalFailures.length,
         recoveredFailedJobs: recoveredFailedJobs.length,
         activeJobs: currentActiveJobs.length,
         staleActiveJobs: staleActiveJobs.length,
         failedCommands: failedCommands.length,
         unmatchedRuntimePaths: projection.summary.unmatchedRepositoryEvents,
       },
-      unresolvedFailedJobs: unresolvedFailedJobs.slice(0, 20),
+      unresolvedFailedJobs: actionableUnresolvedFailures.slice(0, 20),
+      inconclusiveHistoricalFailures: inconclusiveHistoricalFailures.slice(0, 20),
       recoveredFailedJobs: recoveredFailedJobs.slice(0, 20),
       activeJobs: currentActiveJobs.slice(0, 20),
       staleActiveJobs: staleActiveJobs.slice(0, 20),

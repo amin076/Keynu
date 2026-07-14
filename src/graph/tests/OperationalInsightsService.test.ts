@@ -223,4 +223,57 @@ assert(
   )
 );
 
+
+const inconclusiveEvents = [
+  {
+    id: "event-inconclusive-job-failed",
+    time: "2026-07-14T00:07:00.000Z",
+    jobId: "job-inconclusive-history-001",
+    type: "node.failed",
+    nodeId: "runtime-step:job-inconclusive-history-001",
+    metadata: { phase: "failed" }
+  },
+  {
+    id: "event-inconclusive-command-success",
+    time: "2026-07-14T00:07:01.000Z",
+    jobId: "job-inconclusive-history-001",
+    type: "node.success",
+    nodeId: "runtime-step:job-inconclusive-history-001:command:0",
+    metadata: { category: "command", command: "node" }
+  },
+  {
+    id: "event-later-unrelated-success",
+    time: "2026-07-14T00:08:00.000Z",
+    jobId: "job-later-success-001",
+    type: "node.success",
+    nodeId: "runtime-step:job-later-success-001",
+    metadata: { phase: "completed" }
+  }
+];
+
+writeFileSync(
+  eventPath,
+  [...events, ...recoveryEvents, ...dashboardRecoveryEvents, ...inconclusiveEvents]
+    .map((event) => JSON.stringify(event))
+    .join("\n") + "\n",
+  "utf8"
+);
+
+const inconclusiveResult = service.getSummary();
+assert(
+  inconclusiveResult.inconclusiveHistoricalFailures.some(
+    (node) => node.label === "job-inconclusive-history-001"
+  )
+);
+assert(
+  !inconclusiveResult.unresolvedFailedJobs.some(
+    (node) => node.label === "job-inconclusive-history-001"
+  )
+);
+assert(
+  inconclusiveResult.insights.some(
+    (item: OperationalInsight) => item.category === "historical-failure"
+  )
+);
+
 console.log("Operational insights service tests passed.");
