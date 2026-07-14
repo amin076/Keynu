@@ -50,4 +50,12 @@ assert(client.includes('material.opacity'));
 assert(client.includes('dblclick'));
 assert(client.includes('applySelectionHighlight(nodeMeshes, edgeLines, null)'));
 
+assert(client.includes('Graph3DEdgeRenderRecord'));
+assert(client.includes('edgeRendering.records'));
+assert(client.includes('record.edge.source === context.selectedNodeId'));
+assert(client.includes('record.edge.target === context.selectedNodeId'));
+assert(client.includes('material.color.setHex'));
+assert(client.includes('connected ? 0x22d3ee : 0x64748b'));
+assert(client.includes('connected ? 0.95 : 0.05'));
+
 console.log("Graph 3D Dashboard tests passed.");

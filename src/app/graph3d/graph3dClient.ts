@@ -10,6 +10,11 @@ type GraphResponse<T> = {
 const NODE_LIMIT = 140;
 const EDGE_LIMIT = 320;
 
+type Graph3DEdgeRenderRecord = {
+  edge: Graph3DEdge;
+  line: THREE.Line;
+};
+
 type Graph3DSelectionContext = {
   selectedNodeId: string;
   relatedNodeIds: Set<string>;
@@ -221,7 +226,7 @@ function createNodeMesh(node: Graph3DNode): THREE.Mesh {
 
 function applySelectionHighlight(
   nodeMeshes: THREE.Mesh[],
-  edgeLines: THREE.LineSegments,
+  edgeRecords: Graph3DEdgeRenderRecord[],
   context: Graph3DSelectionContext | null,
 ): void {
   for (const mesh of nodeMeshes) {
@@ -243,39 +248,47 @@ function applySelectionHighlight(
           : 0.16;
   }
 
-  const edgeMaterial = edgeLines.material as THREE.LineBasicMaterial;
-  edgeMaterial.opacity = context ? 0.12 : 0.34;
+  for (const record of edgeRecords) {
+    const material = record.line.material as THREE.LineBasicMaterial;
+    const connected = context
+      ? record.edge.source === context.selectedNodeId ||
+        record.edge.target === context.selectedNodeId
+      : false;
+
+    material.color.setHex(connected ? 0x22d3ee : 0x64748b);
+    material.opacity = context ? (connected ? 0.95 : 0.05) : 0.34;
+    material.transparent = true;
+  }
 }
 
 function createEdgeLines(
   edges: Graph3DEdge[],
   positions: Map<string, THREE.Vector3>,
-): THREE.LineSegments {
-  const points: number[] = [];
+): {
+  group: THREE.Group;
+  records: Graph3DEdgeRenderRecord[];
+} {
+  const group = new THREE.Group();
+  const records: Graph3DEdgeRenderRecord[] = [];
 
   for (const edge of edges) {
     const source = positions.get(edge.source);
     const target = positions.get(edge.target);
     if (!source || !target) continue;
 
-    points.push(source.x, source.y, source.z);
-    points.push(target.x, target.y, target.z);
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(points, 3),
-  );
-
-  return new THREE.LineSegments(
-    geometry,
-    new THREE.LineBasicMaterial({
+    const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
+    const material = new THREE.LineBasicMaterial({
       color: 0x64748b,
       transparent: true,
       opacity: 0.34,
-    }),
-  );
+    });
+    const line = new THREE.Line(geometry, material);
+    line.userData.graphEdge = edge;
+    group.add(line);
+    records.push({ edge, line });
+  }
+
+  return { group, records };
 }
 
 export async function startGraph3D(): Promise<void> {
@@ -326,8 +339,8 @@ export async function startGraph3D(): Promise<void> {
     graphGroup.add(mesh);
   }
 
-  const edgeLines = createEdgeLines(graph.edges, positions);
-  graphGroup.add(edgeLines);
+  const edgeRendering = createEdgeLines(graph.edges, positions);
+  graphGroup.add(edgeRendering.group);
   scene.add(graphGroup);
 
   if (status) {
@@ -337,7 +350,7 @@ export async function startGraph3D(): Promise<void> {
 
   renderer.domElement.addEventListener("dblclick", () => {
     selectedMesh = null;
-    applySelectionHighlight(nodeMeshes, edgeLines, null);
+    applySelectionHighlight(nodeMeshes, edgeRendering.records, null);
     setGraph3DText("graph3dSelected", "Click a node in the 3D graph");
     setGraph3DText("graph3dSelectedKind", "--");
     setGraph3DText("graph3dSelectedState", "--");
@@ -367,7 +380,7 @@ export async function startGraph3D(): Promise<void> {
         if (edge.target === node.id) relatedNodeIds.add(edge.source);
       }
 
-      applySelectionHighlight(nodeMeshes, edgeLines, {
+      applySelectionHighlight(nodeMeshes, edgeRendering.records, {
         selectedNodeId: node.id,
         relatedNodeIds,
       });
