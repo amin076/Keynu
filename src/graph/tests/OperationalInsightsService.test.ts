@@ -277,4 +277,41 @@ assert(
   )
 );
 
+
+const missingPathEvents = [
+  {
+    id: "event-historical-missing-path",
+    time: "2026-07-14T00:09:00.000Z",
+    jobId: "job-historical-missing-path",
+    type: "node.success",
+    nodeId: "runtime-step:job-historical-missing-path:read:0",
+    metadata: {
+      category: "read",
+      path: "src/deleted-historical-file.ts"
+    }
+  }
+];
+
+writeFileSync(
+  eventPath,
+  [...events, ...recoveryEvents, ...dashboardRecoveryEvents, ...inconclusiveEvents, ...missingPathEvents]
+    .map((event) => JSON.stringify(event))
+    .join("\n") + "\n",
+  "utf8"
+);
+
+const missingPathResult = service.getSummary();
+assert.equal(missingPathResult.counts.unmatchedRuntimePaths, 0);
+assert.equal(missingPathResult.counts.historicalMissingPaths, 1);
+assert(
+  missingPathResult.insights.some(
+    (item: OperationalInsight) => item.category === "historical-missing-path"
+  )
+);
+assert(
+  !missingPathResult.insights.some(
+    (item: OperationalInsight) => item.category === "unmatched-runtime-path"
+  )
+);
+
 console.log("Operational insights service tests passed.");

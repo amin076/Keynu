@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { EffectiveGraphQueryService } from "./EffectiveGraphQueryService.js";
 import type { GraphEdge, GraphNode } from "./GraphTypes.js";
 
@@ -11,7 +12,8 @@ export type OperationalInsightCategory =
   | "stale-operation"
   | "frequently-touched-file"
   | "high-impact-file"
-  | "unmatched-runtime-path";
+  | "unmatched-runtime-path"
+  | "historical-missing-path";
 
 export type OperationalInsight = {
   id: string;
@@ -167,6 +169,21 @@ export class OperationalInsightsService {
       (node) => !inconclusiveHistoricalFailures.includes(node),
     );
 
+    const unmatchedRepositoryCorrelations = projection.correlations.filter(
+      (item) =>
+        item.classification === "repository" &&
+        !item.repositoryNodeId &&
+        Boolean(item.path),
+    );
+
+    const actionableUnmatchedPaths = unmatchedRepositoryCorrelations.filter(
+      (item) => existsSync(String(item.path)),
+    );
+
+    const historicalMissingPaths = unmatchedRepositoryCorrelations.filter(
+      (item) => !existsSync(String(item.path)),
+    );
+
     const frequentlyTouchedFiles = this.rankFileActivity(edges, files);
     const highImpactFiles = this.rankHighImpactFiles(files);
     const insights: OperationalInsight[] = [];
@@ -265,21 +282,39 @@ export class OperationalInsightsService {
       });
     }
 
-    if (projection.summary.unmatchedRepositoryEvents > 0) {
+    if (actionableUnmatchedPaths.length > 0) {
       insights.push({
         id: "unmatched-runtime-paths",
         category: "unmatched-runtime-path",
         severity: "warning",
-        title: "Unmatched repository runtime paths",
+        title: "Actionable unmatched repository paths",
         summary:
-          String(projection.summary.unmatchedRepositoryEvents) +
-          " repository runtime event(s) could not be matched to snapshot nodes.",
+          String(actionableUnmatchedPaths.length) +
+          " runtime path event(s) reference files that currently exist but are absent from the snapshot.",
         evidence: {
-          unmatchedRepositoryEvents: projection.summary.unmatchedRepositoryEvents,
-          repositoryPathEvents: projection.summary.repositoryPathEvents,
+          actionableUnmatchedPaths: actionableUnmatchedPaths.length,
+          paths: [...new Set(actionableUnmatchedPaths.map((item) => item.path))],
         },
         recommendedAction:
-          "Refresh the repository snapshot or review path normalization and exclusion rules.",
+          "Refresh the repository snapshot or inspect path normalization rules.",
+      });
+    }
+
+    if (historicalMissingPaths.length > 0) {
+      insights.push({
+        id: "historical-missing-runtime-paths",
+        category: "historical-missing-path",
+        severity: "info",
+        title: "Historical runtime paths no longer exist",
+        summary:
+          String(historicalMissingPaths.length) +
+          " historical runtime path event(s) reference files that are no longer present in the repository.",
+        evidence: {
+          historicalMissingPaths: historicalMissingPaths.length,
+          paths: [...new Set(historicalMissingPaths.map((item) => item.path))],
+        },
+        recommendedAction:
+          "Keep these events as historical telemetry; no current repository repair is required.",
       });
     }
 
@@ -296,7 +331,9 @@ export class OperationalInsightsService {
         activeJobs: currentActiveJobs.length,
         staleActiveJobs: staleActiveJobs.length,
         failedCommands: failedCommands.length,
-        unmatchedRuntimePaths: projection.summary.unmatchedRepositoryEvents,
+        unmatchedRuntimePaths: actionableUnmatchedPaths.length,
+        historicalMissingPaths: historicalMissingPaths.length,
+        totalUnmatchedRuntimeEvents: projection.summary.unmatchedRepositoryEvents,
       },
       unresolvedFailedJobs: actionableUnresolvedFailures.slice(0, 20),
       inconclusiveHistoricalFailures: inconclusiveHistoricalFailures.slice(0, 20),

@@ -18,4 +18,7 @@ assert(source.includes('function loadOperationalInsights'));
 assert(source.includes('/api/graph/operational-insights'));
 assert(source.includes('loadOperationalInsights().catch'));
 
+assert(source.includes("historical-missing-path"));
+assert(source.includes("Historical paths"));
+
 console.log("Operational Insights Dashboard tests passed.");
