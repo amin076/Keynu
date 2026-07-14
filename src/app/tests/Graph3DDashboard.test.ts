@@ -43,4 +43,11 @@ assert(client.includes('/api/graph/effective/activity'));
 assert(client.includes('impactedNodes'));
 assert(client.includes('repositoryNodeId === node.id'));
 
+assert(client.includes('Graph3DSelectionContext'));
+assert(client.includes('applySelectionHighlight'));
+assert(client.includes('relatedNodeIds'));
+assert(client.includes('material.opacity'));
+assert(client.includes('dblclick'));
+assert(client.includes('applySelectionHighlight(nodeMeshes, edgeLines, null)'));
+
 console.log("Graph 3D Dashboard tests passed.");

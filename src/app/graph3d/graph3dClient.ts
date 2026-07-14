@@ -10,6 +10,11 @@ type GraphResponse<T> = {
 const NODE_LIMIT = 140;
 const EDGE_LIMIT = 320;
 
+type Graph3DSelectionContext = {
+  selectedNodeId: string;
+  relatedNodeIds: Set<string>;
+};
+
 function setGraph3DText(id: string, value: unknown): void {
   const element = document.getElementById(id);
   if (element) element.textContent = String(value ?? "--");
@@ -214,6 +219,34 @@ function createNodeMesh(node: Graph3DNode): THREE.Mesh {
   return mesh;
 }
 
+function applySelectionHighlight(
+  nodeMeshes: THREE.Mesh[],
+  edgeLines: THREE.LineSegments,
+  context: Graph3DSelectionContext | null,
+): void {
+  for (const mesh of nodeMeshes) {
+    const node = mesh.userData.graphNode as Graph3DNode | undefined;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const isSelected = node?.id === context?.selectedNodeId;
+    const isRelated = node ? context?.relatedNodeIds.has(node.id) === true : false;
+    const isVisible = !context || isSelected || isRelated;
+
+    mesh.scale.setScalar(isSelected ? 1.65 : isRelated ? 1.25 : 1);
+    material.opacity = isVisible ? 1 : 0.14;
+    material.transparent = !isVisible;
+    material.emissiveIntensity = isSelected
+      ? 1
+      : isRelated
+        ? 0.45
+        : node?.state === "active"
+          ? 0.55
+          : 0.16;
+  }
+
+  const edgeMaterial = edgeLines.material as THREE.LineBasicMaterial;
+  edgeMaterial.opacity = context ? 0.12 : 0.34;
+}
+
 function createEdgeLines(
   edges: Graph3DEdge[],
   positions: Map<string, THREE.Vector3>,
@@ -293,13 +326,25 @@ export async function startGraph3D(): Promise<void> {
     graphGroup.add(mesh);
   }
 
-  graphGroup.add(createEdgeLines(graph.edges, positions));
+  const edgeLines = createEdgeLines(graph.edges, positions);
+  graphGroup.add(edgeLines);
   scene.add(graphGroup);
 
   if (status) {
     status.textContent =
       `Three.js connected — ${graph.nodes.length} nodes and ${graph.edges.length} edges loaded`;
   }
+
+  renderer.domElement.addEventListener("dblclick", () => {
+    selectedMesh = null;
+    applySelectionHighlight(nodeMeshes, edgeLines, null);
+    setGraph3DText("graph3dSelected", "Click a node in the 3D graph");
+    setGraph3DText("graph3dSelectedKind", "--");
+    setGraph3DText("graph3dSelectedState", "--");
+    setGraph3DText("graph3dSelectedNeighbors", 0);
+    setGraph3DText("graph3dSelectedImpact", 0);
+    setGraph3DText("graph3dSelectedActivity", 0);
+  });
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
     const bounds = renderer.domElement.getBoundingClientRect();
@@ -310,20 +355,23 @@ export async function startGraph3D(): Promise<void> {
     const hit = raycaster.intersectObjects(nodeMeshes, false)[0];
     if (!hit) return;
 
-    if (selectedMesh) {
-      selectedMesh.scale.setScalar(1);
-      const previousMaterial = selectedMesh.material as THREE.MeshStandardMaterial;
-      previousMaterial.emissiveIntensity =
-        selectedMesh.userData.graphNode?.state === "active" ? 0.55 : 0.16;
-    }
-
     selectedMesh = hit.object as THREE.Mesh;
-    selectedMesh.scale.setScalar(1.65);
-    const selectedMaterial = selectedMesh.material as THREE.MeshStandardMaterial;
-    selectedMaterial.emissiveIntensity = 1;
 
     const node = selectedMesh.userData.graphNode as Graph3DNode | undefined;
     if (node) {
+      const relatedNodeIds = new Set<string>();
+      relatedNodeIds.add(node.id);
+
+      for (const edge of graph.edges) {
+        if (edge.source === node.id) relatedNodeIds.add(edge.target);
+        if (edge.target === node.id) relatedNodeIds.add(edge.source);
+      }
+
+      applySelectionHighlight(nodeMeshes, edgeLines, {
+        selectedNodeId: node.id,
+        relatedNodeIds,
+      });
+
       showNodeIntelligence(node).catch((error) => {
         setGraph3DText(
           "graph3dSelected",
