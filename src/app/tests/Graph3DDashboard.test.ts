@@ -34,4 +34,13 @@ assert(client.includes('showNodeIntelligence'));
 assert(client.includes('/api/graph/effective/neighbors'));
 assert(client.includes('intersectObjects'));
 
+assert(html.includes('id="graph3dSelectedImpact"'));
+assert(html.includes('id="graph3dSelectedActivity"'));
+assert(html.includes('id="graph3dImpact"'));
+assert(html.includes('id="graph3dActivity"'));
+assert(client.includes('/api/graph/effective/impact'));
+assert(client.includes('/api/graph/effective/activity'));
+assert(client.includes('impactedNodes'));
+assert(client.includes('repositoryNodeId === node.id'));
+
 console.log("Graph 3D Dashboard tests passed.");

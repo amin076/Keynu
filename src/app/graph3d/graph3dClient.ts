@@ -30,16 +30,56 @@ async function showNodeIntelligence(node: Graph3DNode): Promise<void> {
   setGraph3DText("graph3dSelectedKind", node.kind);
   setGraph3DText("graph3dSelectedState", node.state);
 
-  const response = await fetch(
-    "/api/graph/effective/neighbors?nodeId=" + encodeURIComponent(node.id) + "&depth=1",
-    { cache: "no-store" },
+  const encodedNodeId = encodeURIComponent(node.id);
+  const [neighborsResponse, impactResponse, activityResponse] = await Promise.all([
+    fetch(
+      "/api/graph/effective/neighbors?nodeId=" + encodedNodeId + "&depth=1",
+      { cache: "no-store" },
+    ),
+    fetch(
+      "/api/graph/effective/impact?nodeId=" + encodedNodeId + "&depth=4",
+      { cache: "no-store" },
+    ),
+    fetch("/api/graph/effective/activity?limit=200", {
+      cache: "no-store",
+    }),
+  ]);
+
+  if (!neighborsResponse.ok) {
+    throw new Error("Unable to load selected-node neighbors");
+  }
+  if (!impactResponse.ok) {
+    throw new Error("Unable to load selected-node impact analysis");
+  }
+  if (!activityResponse.ok) {
+    throw new Error("Unable to load selected-node activity");
+  }
+
+  const neighborsResult = await neighborsResponse.json() as {
+    nodes?: Graph3DNode[];
+  };
+  const impactResult = await impactResponse.json() as {
+    impactedNodes?: Graph3DNode[];
+  };
+  const activityResult = await activityResponse.json() as {
+    items?: Array<{
+      repositoryNodeId?: string;
+      type?: string;
+      time?: string;
+      jobId?: string;
+      path?: string;
+    }>;
+  };
+
+  const neighbors = neighborsResult.nodes ?? [];
+  const impactedNodes = impactResult.impactedNodes ?? [];
+  const activity = (activityResult.items ?? []).filter(
+    (item) => item.repositoryNodeId === node.id,
   );
 
-  if (!response.ok) throw new Error("Unable to load selected-node neighbors");
-
-  const result = await response.json() as { nodes?: Graph3DNode[] };
-  const neighbors = result.nodes ?? [];
   setGraph3DText("graph3dSelectedNeighbors", neighbors.length);
+  setGraph3DText("graph3dSelectedImpact", impactedNodes.length);
+  setGraph3DText("graph3dSelectedActivity", activity.length);
 
   const related = document.getElementById("graph3dRelated");
   if (related) {
@@ -55,8 +95,37 @@ async function showNodeIntelligence(node: Graph3DNode): Promise<void> {
         ).join("")
       : '<div class="logline">No neighboring nodes</div>';
   }
-}
 
+  const impact = document.getElementById("graph3dImpact");
+  if (impact) {
+    impact.innerHTML = impactedNodes.length
+      ? impactedNodes.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.kind) +
+          "</strong> — " +
+          escapeGraph3DHtml(item.path ?? item.label) +
+          " — " +
+          escapeGraph3DHtml(item.state) +
+          "</div>",
+        ).join("")
+      : '<div class="logline">No impacted nodes</div>';
+  }
+
+  const activityContainer = document.getElementById("graph3dActivity");
+  if (activityContainer) {
+    activityContainer.innerHTML = activity.length
+      ? activity.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.type ?? "activity") +
+          "</strong> — " +
+          escapeGraph3DHtml(item.jobId ?? item.path ?? node.label) +
+          '<div class="small">' +
+          escapeGraph3DHtml(item.time ?? "") +
+          "</div></div>",
+        ).join("")
+      : '<div class="logline">No recent activity for this node</div>';
+  }
+}
 function colorForNode(node: Graph3DNode): number {
   if (node.state === "failed") return 0xfb7185;
   if (node.state === "active" || node.state === "queued") return 0xf59e0b;
