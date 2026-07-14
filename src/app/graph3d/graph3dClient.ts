@@ -13,8 +13,11 @@ const EDGE_LIMIT = 320;
 let activeGraph3DCleanup: (() => void) | null = null;
 let graph3DReloadHandler: (() => void) | null = null;
 let graph3DRequestRevision = 0;
+let graph3DPage = 1;
 let graph3DSearchKeyHandler: ((event: KeyboardEvent) => void) | null = null;
 let graph3DKindChangeHandler: (() => void) | null = null;
+let graph3DPreviousHandler: (() => void) | null = null;
+let graph3DNextHandler: (() => void) | null = null;
 
 type Graph3DEdgeRenderRecord = {
   edge: Graph3DEdge;
@@ -189,11 +192,14 @@ function positionNodes(nodes: Graph3DNode[]): Map<string, THREE.Vector3> {
   return positions;
 }
 
-async function readGraphData(search = "", kind = ""): Promise<{
+async function readGraphData(search = "", kind = "", page = 1): Promise<{
   nodes: Graph3DNode[];
   edges: Graph3DEdge[];
 }> {
-  const nodeQuery = new URLSearchParams({ limit: String(NODE_LIMIT) });
+  const nodeQuery = new URLSearchParams({
+    limit: String(NODE_LIMIT),
+    offset: String(Math.max(0, page - 1) * NODE_LIMIT),
+  });
   if (search) nodeQuery.set("search", search);
   if (kind) nodeQuery.set("kind", kind);
 
@@ -341,7 +347,11 @@ export async function startGraph3D(): Promise<void> {
   const searchInput = document.getElementById("graph3dSearch") as HTMLInputElement | null;
   const kindSelect = document.getElementById("graph3dKind") as HTMLSelectElement | null;
   setGraph3DText("graph3dStatus", "Loading filtered effective graph…");
-  const graph = await readGraphData(searchInput?.value.trim() ?? "", kindSelect?.value ?? "");
+  const graph = await readGraphData(
+    searchInput?.value.trim() ?? "",
+    kindSelect?.value ?? "",
+    graph3DPage,
+  );
   if (requestRevision !== graph3DRequestRevision) return;
   if (graph.nodes.length === 0) {
     container.replaceChildren();
@@ -370,6 +380,10 @@ export async function startGraph3D(): Promise<void> {
     status.textContent =
       `Three.js connected — ${graph.nodes.length} nodes and ${graph.edges.length} edges loaded`;
   }
+  setGraph3DText("graph3dLoadedNodes", graph.nodes.length);
+  setGraph3DText("graph3dLoadedEdges", graph.edges.length);
+  setGraph3DText("graph3dPageNumber", graph3DPage);
+  setGraph3DText("graph3dPageStatus", `Page ${graph3DPage}`);
 
   renderer.domElement.addEventListener("dblclick", () => {
     selectedMesh = null;
@@ -464,15 +478,42 @@ export async function startGraph3D(): Promise<void> {
     searchInput.removeEventListener("keydown", graph3DSearchKeyHandler);
   }
   graph3DSearchKeyHandler = (event: KeyboardEvent) => {
-    if (event.key === "Enter") graph3DReloadHandler?.();
+    if (event.key !== "Enter") return;
+    graph3DPage = 1;
+    graph3DReloadHandler?.();
   };
   searchInput?.addEventListener("keydown", graph3DSearchKeyHandler);
 
   if (kindSelect && graph3DKindChangeHandler) {
     kindSelect.removeEventListener("change", graph3DKindChangeHandler);
   }
-  graph3DKindChangeHandler = () => graph3DReloadHandler?.();
+  graph3DKindChangeHandler = () => {
+    graph3DPage = 1;
+    graph3DReloadHandler?.();
+  };
   kindSelect?.addEventListener("change", graph3DKindChangeHandler);
+
+  const previousButton = document.getElementById("graph3dPrevious");
+  if (previousButton && graph3DPreviousHandler) {
+    previousButton.removeEventListener("click", graph3DPreviousHandler);
+  }
+  graph3DPreviousHandler = () => {
+    if (graph3DPage <= 1) return;
+    graph3DPage -= 1;
+    graph3DReloadHandler?.();
+  };
+  previousButton?.addEventListener("click", graph3DPreviousHandler);
+
+  const nextButton = document.getElementById("graph3dNext");
+  if (nextButton && graph3DNextHandler) {
+    nextButton.removeEventListener("click", graph3DNextHandler);
+  }
+  graph3DNextHandler = () => {
+    if (graph.nodes.length < NODE_LIMIT) return;
+    graph3DPage += 1;
+    graph3DReloadHandler?.();
+  };
+  nextButton?.addEventListener("click", graph3DNextHandler);
 
   window.addEventListener("resize", resize);
   resize();

@@ -81,12 +81,30 @@ assert(client.includes('addEventListener("click", graph3DReloadHandler)'));
 assert(client.includes('graph3DRequestRevision'));
 assert(client.includes('requestRevision !== graph3DRequestRevision'));
 assert(client.includes('No graph nodes match the current filters'));
-assert(client.includes('event.key === "Enter"'));
+assert(client.includes('event.key !== "Enter"'));
 assert(client.includes('kindSelect?.addEventListener("change"'));
 
 assert(client.includes('graph3DSearchKeyHandler'));
 assert(client.includes('graph3DKindChangeHandler'));
 assert(client.includes('removeEventListener("keydown", graph3DSearchKeyHandler)'));
 assert(client.includes('removeEventListener("change", graph3DKindChangeHandler)'));
+
+assert(html.includes('id="graph3dPrevious"'));
+assert(html.includes('id="graph3dNext"'));
+assert(html.includes('id="graph3dPageStatus"'));
+assert(html.includes('id="graph3dLoadedNodes"'));
+assert(html.includes('id="graph3dLoadedEdges"'));
+assert(client.includes('graph3DPage'));
+assert(client.includes('offset: String(Math.max(0, page - 1) * NODE_LIMIT)'));
+assert(client.includes('graph3dPrevious'));
+assert(client.includes('graph3dNext'));
+assert(client.includes('graph3dLoadedNodes'));
+assert(client.includes('graph3dLoadedEdges'));
+
+assert(client.includes('graph3DPreviousHandler'));
+assert(client.includes('graph3DNextHandler'));
+assert(client.includes('removeEventListener("click", graph3DPreviousHandler)'));
+assert(client.includes('removeEventListener("click", graph3DNextHandler)'));
+assert(client.includes('graph3DPage = 1'));
 
 console.log("Graph 3D Dashboard tests passed.");
