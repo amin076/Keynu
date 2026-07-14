@@ -11,6 +11,7 @@ import { MissionManager } from "../mission/MissionManager.js";
 import { GraphQueryService } from "../graph/GraphQueryService.js";
 import { GraphEventStore } from "../graph/GraphEventStore.js";
 import { EffectiveGraphQueryService } from "../graph/EffectiveGraphQueryService.js";
+import { OperationalInsightsService } from "../graph/OperationalInsightsService.js";
 export type DashboardServerHandle = {
   server: Server;
   host: string;
@@ -27,6 +28,7 @@ export type DashboardServerOptions = {
   graphQueryService?: GraphQueryService;
   graphEventStore?: GraphEventStore;
   effectiveGraphQueryService?: EffectiveGraphQueryService;
+  operationalInsightsService?: OperationalInsightsService;
 };
 
 type JsonValue = Record<string, unknown> | unknown[];
@@ -210,6 +212,7 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
   const graphQueryService = options.graphQueryService ?? new GraphQueryService();
   const graphEventStore = options.graphEventStore ?? new GraphEventStore();
   const effectiveGraphQueryService = options.effectiveGraphQueryService ?? new EffectiveGraphQueryService();
+  const operationalInsightsService = options.operationalInsightsService ?? new OperationalInsightsService(effectiveGraphQueryService);
 
   pushEvent("dashboard", "Dashboard server boot requested");
 
@@ -233,6 +236,14 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
 
       if (path === "/health") {
         sendJson(response, 200, { ok: true, service: "keynu-dashboard", startedAt });
+        return;
+      }
+
+      if (path === "/api/graph/operational-insights") {
+        sendJson(response, 200, {
+          ok: true,
+          operationalInsights: operationalInsightsService.getSummary(),
+        });
         return;
       }
 
