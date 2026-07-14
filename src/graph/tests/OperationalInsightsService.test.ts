@@ -227,20 +227,20 @@ assert(
 
 const inconclusiveEvents = [
   {
-    id: "event-inconclusive-job-failed",
-    time: "2026-07-14T00:07:00.000Z",
-    jobId: "job-inconclusive-history-001",
-    type: "node.failed",
-    nodeId: "runtime-step:job-inconclusive-history-001",
-    metadata: { phase: "failed" }
-  },
-  {
     id: "event-inconclusive-command-success",
-    time: "2026-07-14T00:07:01.000Z",
+    time: "2026-07-14T00:07:00.000Z",
     jobId: "job-inconclusive-history-001",
     type: "node.success",
     nodeId: "runtime-step:job-inconclusive-history-001:command:0",
     metadata: { category: "command", command: "node" }
+  },
+  {
+    id: "event-inconclusive-job-failed",
+    time: "2026-07-14T00:07:01.000Z",
+    jobId: "job-inconclusive-history-001",
+    type: "node.failed",
+    nodeId: "runtime-step:job-inconclusive-history-001",
+    metadata: { phase: "failed" }
   },
   {
     id: "event-later-unrelated-success",
