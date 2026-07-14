@@ -97,7 +97,8 @@ const service = new OperationalInsightsService(query);
 const result = service.getSummary();
 
 assert.equal(result.counts.failedJobs, 1);
-assert.equal(result.counts.unresolvedFailedJobs, 1);
+assert.equal(result.counts.unresolvedFailedJobs, 0);
+assert.equal(result.counts.inconclusiveHistoricalFailures, 1);
 assert.equal(result.counts.recoveredFailedJobs, 0);
 assert.equal(result.counts.activeJobs, 0);
 assert.equal(result.counts.staleActiveJobs, 0);
@@ -107,7 +108,7 @@ assert.equal(result.highImpactFiles[0].node.id, "file:src/a.ts");
 assert.equal(result.highImpactFiles[0].impactedNodeCount, 1);
 assert(
   result.insights.some(
-    (item: OperationalInsight) => item.category === "unresolved-failure"
+    (item: OperationalInsight) => item.category === "historical-failure"
   )
 );
 assert(
