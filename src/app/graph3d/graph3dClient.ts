@@ -13,6 +13,8 @@ const EDGE_LIMIT = 320;
 let activeGraph3DCleanup: (() => void) | null = null;
 let graph3DReloadHandler: (() => void) | null = null;
 let graph3DRequestRevision = 0;
+let graph3DSearchKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+let graph3DKindChangeHandler: (() => void) | null = null;
 
 type Graph3DEdgeRenderRecord = {
   edge: Graph3DEdge;
@@ -458,10 +460,19 @@ export async function startGraph3D(): Promise<void> {
     });
   };
   reloadButton?.addEventListener("click", graph3DReloadHandler);
-  searchInput?.addEventListener("keydown", (event) => {
+  if (searchInput && graph3DSearchKeyHandler) {
+    searchInput.removeEventListener("keydown", graph3DSearchKeyHandler);
+  }
+  graph3DSearchKeyHandler = (event: KeyboardEvent) => {
     if (event.key === "Enter") graph3DReloadHandler?.();
-  });
-  kindSelect?.addEventListener("change", () => graph3DReloadHandler?.());
+  };
+  searchInput?.addEventListener("keydown", graph3DSearchKeyHandler);
+
+  if (kindSelect && graph3DKindChangeHandler) {
+    kindSelect.removeEventListener("change", graph3DKindChangeHandler);
+  }
+  graph3DKindChangeHandler = () => graph3DReloadHandler?.();
+  kindSelect?.addEventListener("change", graph3DKindChangeHandler);
 
   window.addEventListener("resize", resize);
   resize();

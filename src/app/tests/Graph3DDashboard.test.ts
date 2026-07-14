@@ -84,4 +84,9 @@ assert(client.includes('No graph nodes match the current filters'));
 assert(client.includes('event.key === "Enter"'));
 assert(client.includes('kindSelect?.addEventListener("change"'));
 
+assert(client.includes('graph3DSearchKeyHandler'));
+assert(client.includes('graph3DKindChangeHandler'));
+assert(client.includes('removeEventListener("keydown", graph3DSearchKeyHandler)'));
+assert(client.includes('removeEventListener("change", graph3DKindChangeHandler)'));
+
 console.log("Graph 3D Dashboard tests passed.");
