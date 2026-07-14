@@ -78,4 +78,10 @@ assert(client.includes('graph3DReloadHandler'));
 assert(client.includes('removeEventListener("click", graph3DReloadHandler)'));
 assert(client.includes('addEventListener("click", graph3DReloadHandler)'));
 
+assert(client.includes('graph3DRequestRevision'));
+assert(client.includes('requestRevision !== graph3DRequestRevision'));
+assert(client.includes('No graph nodes match the current filters'));
+assert(client.includes('event.key === "Enter"'));
+assert(client.includes('kindSelect?.addEventListener("change"'));
+
 console.log("Graph 3D Dashboard tests passed.");

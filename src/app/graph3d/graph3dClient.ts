@@ -12,6 +12,7 @@ const EDGE_LIMIT = 320;
 
 let activeGraph3DCleanup: (() => void) | null = null;
 let graph3DReloadHandler: (() => void) | null = null;
+let graph3DRequestRevision = 0;
 
 type Graph3DEdgeRenderRecord = {
   edge: Graph3DEdge;
@@ -299,6 +300,7 @@ function createEdgeLines(
 }
 
 export async function startGraph3D(): Promise<void> {
+  const requestRevision = ++graph3DRequestRevision;
   activeGraph3DCleanup?.();
   activeGraph3DCleanup = null;
 
@@ -336,7 +338,14 @@ export async function startGraph3D(): Promise<void> {
 
   const searchInput = document.getElementById("graph3dSearch") as HTMLInputElement | null;
   const kindSelect = document.getElementById("graph3dKind") as HTMLSelectElement | null;
+  setGraph3DText("graph3dStatus", "Loading filtered effective graph…");
   const graph = await readGraphData(searchInput?.value.trim() ?? "", kindSelect?.value ?? "");
+  if (requestRevision !== graph3DRequestRevision) return;
+  if (graph.nodes.length === 0) {
+    container.replaceChildren();
+    setGraph3DText("graph3dStatus", "No graph nodes match the current filters");
+    return;
+  }
   const positions = positionNodes(graph.nodes);
   const graphGroup = new THREE.Group();
   const nodeMeshes: THREE.Mesh[] = [];
@@ -449,6 +458,10 @@ export async function startGraph3D(): Promise<void> {
     });
   };
   reloadButton?.addEventListener("click", graph3DReloadHandler);
+  searchInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") graph3DReloadHandler?.();
+  });
+  kindSelect?.addEventListener("change", () => graph3DReloadHandler?.());
 
   window.addEventListener("resize", resize);
   resize();
