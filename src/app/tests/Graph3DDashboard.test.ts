@@ -48,7 +48,7 @@ assert(client.includes('applySelectionHighlight'));
 assert(client.includes('relatedNodeIds'));
 assert(client.includes('material.opacity'));
 assert(client.includes('dblclick'));
-assert(client.includes('applySelectionHighlight(nodeMeshes, edgeLines, null)'));
+assert(client.includes('applySelectionHighlight(nodeMeshes, edgeRendering.records, null)'));
 
 assert(client.includes('Graph3DEdgeRenderRecord'));
 assert(client.includes('edgeRendering.records'));
