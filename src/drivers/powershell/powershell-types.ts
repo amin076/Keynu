@@ -36,6 +36,10 @@ export type PowerShellWriteFileSpec = {
   path: string;
   content: string;
   overwrite?: boolean;
+  mode?: "replace" | "append";
+  operation?: "replace" | "append";
+  expectedSha256?: string;
+  allowProtectedReplace?: boolean;
 };
 
 export type PowerShellWriteFileResult = {
