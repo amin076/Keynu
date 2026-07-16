@@ -3,6 +3,15 @@ import { ConversationLocator } from "./ConversationLocator.js";
 import type { BrowserConversationState } from "./ConversationState.js";
 import type { AssistantMessageSnapshot } from "./AssistantMessageSnapshot.js";
 
+
+const CHATGPT_COMPOSER_SELECTOR = [
+  '#prompt-textarea:visible',
+  'div.ProseMirror[contenteditable="true"]:visible',
+  '[contenteditable="true"][data-virtualkeyboard="true"]:visible',
+  'form [contenteditable="true"]:visible',
+  'textarea:visible',
+].join(', ');
+
 export class ConversationManager {
   private state: BrowserConversationState = "idle";
   private readonly locator: ConversationLocator;
@@ -218,8 +227,7 @@ export class ConversationManager {
 
     for (const selector of selectors) {
 
-      const candidate =
-        this.page.locator(selector).last();
+      const candidate = this.page.locator(CHATGPT_COMPOSER_SELECTOR).last();
 
 
       if ((await candidate.count()) > 0) {

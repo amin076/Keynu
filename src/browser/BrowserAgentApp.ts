@@ -61,6 +61,8 @@ export class BrowserAgentApp {
 
     printBrowserAgentStartupHelp(this.config.conversationUrl);
 
+    await agent.seedWatcherBaseline();
+
     if (shouldRestoreMission) {
       await this.sendMissionBootstrap(
         browser,

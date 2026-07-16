@@ -11,6 +11,7 @@ import { MissionManager } from "../mission/MissionManager.js";
 import { GraphQueryService } from "../graph/GraphQueryService.js";
 import { GraphEventStore } from "../graph/GraphEventStore.js";
 import { EffectiveGraphQueryService } from "../graph/EffectiveGraphQueryService.js";
+import { RuntimeGraphIntelligence } from "../graph/RuntimeGraphIntelligence.js";
 import { OperationalInsightsService } from "../graph/OperationalInsightsService.js";
 export type DashboardServerHandle = {
   server: Server;
@@ -257,7 +258,30 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
         return;
       }
 
-      if (path === "/api/graph/operational-insights") {
+      if (path === "/api/graph/runtime-intelligence") {
+      try {
+        const snapshot = new RuntimeGraphIntelligence().createSnapshot();
+        response.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        response.end(JSON.stringify(snapshot));
+      } catch (error) {
+        response.writeHead(500, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        response.end(
+          JSON.stringify({
+            error: "runtime_graph_intelligence_failed",
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+      return;
+    }
+
+    if (path === "/api/graph/operational-insights") {
         sendJson(response, 200, {
           ok: true,
           operationalInsights: operationalInsightsService.getSummary(),

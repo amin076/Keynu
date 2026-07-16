@@ -4,6 +4,7 @@ export type CommandSpec = {
   cwd?: string;
   timeoutMs?: number;
   runAfterFailure?: boolean;
+  expectedExitCodes?: number[];
   runtime?: 'node' | 'powershell' | 'python' | 'bash';
   script?: string;
   cleanup?: boolean;

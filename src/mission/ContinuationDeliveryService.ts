@@ -4,6 +4,18 @@ import {
 } from './ContinuationRequestBuilder.js';
 import { ContinuationDeliveryStore } from './ContinuationDeliveryStore.js';
 
+const CONTINUATION_MAX_DELIVERY_ATTEMPTS = 3;
+const CONTINUATION_RETRY_DELAYS_MS = [750, 1750] as const;
+
+function waitForContinuationRetry(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function describeContinuationDeliveryError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+
 export type ContinuationMessageSender = (message: string) => Promise<void>;
 
 export type ContinuationDeliveryResult = {
@@ -57,25 +69,45 @@ export class ContinuationDeliveryService {
 
     this.store.markAttempt(request.requestId);
 
-    try {
-      await sendMessage(request.message);
-      this.store.markDelivered(request.requestId);
+    let lastError: unknown;
 
-      return {
-        requestId: request.requestId,
-        resumeToken: request.resumeToken,
-        status: 'DELIVERED',
-        reason: 'Continuation request delivered successfully.',
-      };
-    } catch (error) {
-      this.store.markFailed(request.requestId, error);
+    for (
+      let attempt = 1;
+      attempt <= CONTINUATION_MAX_DELIVERY_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        await sendMessage(request.message);
+        this.store.markDelivered(request.requestId);
 
-      return {
-        requestId: request.requestId,
-        resumeToken: request.resumeToken,
-        status: 'FAILED',
-        reason: error instanceof Error ? error.message : String(error),
-      };
+        return {
+          requestId: request.requestId,
+          resumeToken: request.resumeToken,
+          status: 'DELIVERED',
+          reason: 'Continuation request delivered.',
+        };
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < CONTINUATION_MAX_DELIVERY_ATTEMPTS) {
+          const delay =
+            CONTINUATION_RETRY_DELAYS_MS[attempt - 1] ??
+            CONTINUATION_RETRY_DELAYS_MS.at(-1) ??
+            750;
+          await waitForContinuationRetry(delay);
+        }
+      }
     }
+
+    const failureReason = describeContinuationDeliveryError(lastError);
+    this.store.markFailed(request.requestId, failureReason);
+
+    return {
+      requestId: request.requestId,
+      resumeToken: request.resumeToken,
+      status: 'FAILED',
+      reason: failureReason,
+    };
+
   }
 }

@@ -78,6 +78,9 @@ export async function executeCommand(
   const startedAt = new Date(startedAtMs).toISOString();
   const cwd = spec.cwd ?? defaultCwd;
   const args = spec.args ?? [];
+  const expectedExitCodes = spec.expectedExitCodes?.length
+    ? spec.expectedExitCodes
+    : [0];
   const safety = validateCommandSafety(spec);
 
   if (!safety.ok) {
@@ -102,7 +105,11 @@ export async function executeCommand(
     let settled = false;
     let timeoutHandle: NodeJS.Timeout | undefined;
 
-    const finish = (ok: boolean, error?: string) => {
+    const finish = (
+      ok: boolean,
+      error?: string,
+      exitCode?: number | null,
+    ) => {
       if (settled) return;
       settled = true;
 
@@ -114,6 +121,7 @@ export async function executeCommand(
         args,
         cwd,
         ok,
+        exitCode,
         stdout,
         stderr,
         error,
@@ -150,9 +158,11 @@ export async function executeCommand(
       child.on('error', (error) => finish(false, error.message));
 
       child.on('close', (code) => {
+        const ok = expectedExitCodes.includes(code ?? -1);
         finish(
-          code === 0,
-          code === 0 ? undefined : `Command exited with code ${code}`,
+          ok,
+          ok ? undefined : `Command exited with code ${code}`,
+          code,
         );
       });
     } catch (error) {

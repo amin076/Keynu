@@ -106,4 +106,19 @@ export class ConversationWatcher {
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+
+    async seedBaseline(): Promise<void> {
+    const latest = await this.conversation.readLatestAssistantMessage();
+
+    if (!latest) {
+      console.log('[watcher] No assistant baseline found before bootstrap.');
+      return;
+    }
+
+    this.memory.remember(latest.id);
+    console.log(
+      `[watcher] Seeded assistant baseline before bootstrap: ${latest.id}`,
+    );
+  }
 }

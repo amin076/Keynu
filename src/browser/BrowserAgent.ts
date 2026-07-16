@@ -45,6 +45,20 @@ export class BrowserAgent {
       if (!kap) {
         console.error("[agent] KAP extraction or validation failed.");
         await watcher.markFailed(messageText);
+
+        const missionStatus=this.missionManager.getStatus();
+        if(missionStatus){
+          await this.continuationCoordinator.continueAfterReport({
+            missionId:missionStatus.missionId,
+            missionTitle:missionStatus.title,
+            jobId:`non-kap-${Date.now()}`,
+            reportStatus:"FAILED",
+            nextAction:"Recover after non-KAP assistant response",
+            consecutiveFailureCount:1
+          },async (message) => {
+            await conversation.sendMessage(message);
+          });
+        }
         continue;
       }
 
@@ -293,5 +307,10 @@ export class BrowserAgent {
         await watcher.markFailed(messageText);
       }
     }
+  }
+
+
+  async seedWatcherBaseline(): Promise<void> {
+    await this.browser.getWatcher().seedBaseline();
   }
 }

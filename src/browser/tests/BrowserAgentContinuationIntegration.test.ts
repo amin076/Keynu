@@ -40,7 +40,10 @@ assert.match(
 const reportDeliveryIndex = source.indexOf(
   'serializeBrowserReport(certifiedReport)',
 );
-const continuationIndex = source.indexOf('continueAfterReport(');
+const continuationIndex = source.indexOf(
+  'continueAfterReport(',
+  reportDeliveryIndex,
+);
 
 assert.ok(reportDeliveryIndex >= 0);
 assert.ok(continuationIndex > reportDeliveryIndex);

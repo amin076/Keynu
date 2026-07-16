@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  RuntimeGraphRecommendationService,
+  type RuntimeGraphRecommendation,
+} from './RuntimeGraphRecommendationService.js';
+
 type JsonRecord = Record<string, unknown>;
 
 export type RuntimeGraphNode = {
@@ -155,5 +160,38 @@ export class RuntimeGraphIntelligence {
       recentEdges: edges.slice(-this.maxRecentEdges),
       warnings,
     };
+  }
+
+
+  recommendNextActions(
+    snapshot: RuntimeGraphSnapshot = this.createSnapshot(),
+  ): RuntimeGraphRecommendation[] {
+    const service = new RuntimeGraphRecommendationService();
+
+    const nodes = [...snapshot.activeNodes];
+
+    if (
+      snapshot.activeMissionId &&
+      !nodes.some((node) => node.id === snapshot.activeMissionId)
+    ) {
+      nodes.push({
+        id: snapshot.activeMissionId,
+        type: 'mission',
+        label: snapshot.currentMilestone || snapshot.activeMissionId,
+        status: snapshot.missionStatus || undefined,
+        metadata: {
+          source: 'mission-state',
+          projectId: snapshot.activeProjectId,
+          currentMilestone: snapshot.currentMilestone,
+        }
+      });
+    }
+
+    return service.recommend({
+      activeProjectId: snapshot.activeProjectId,
+      activeMissionId: snapshot.activeMissionId,
+      nodes,
+      edges: snapshot.recentEdges,
+    });
   }
 }
