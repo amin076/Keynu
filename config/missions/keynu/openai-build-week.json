@@ -1,0 +1,120 @@
+{
+  "id": "openai-build-week",
+  "projectId": "keynu",
+  "title": "OpenAI Build Week Submission",
+  "goal": "Prepare, demonstrate, document, and submit Keynu as a strong OpenAI Build Week project built with Codex before the July 21 submission deadline.",
+  "status": "ACTIVE",
+  "currentMilestone": "Define the winning submission concept and minimum competition-ready demo",
+  "completedMilestones": [
+    "Recognized Keynu as the candidate project for OpenAI Build Week",
+    "Confirmed that Keynu Mission Control can persist and restore the active mission across ChatGPT connections"
+  ],
+  "nextMilestones": [
+    "Audit the current working Keynu capabilities that can be demonstrated without speculative rebuilding",
+    "Choose one clear competition story and user problem",
+    "Build and verify the minimum competition-ready demo",
+    "Prepare the demo script and recording",
+    "Prepare submission description, evidence, and repository documentation",
+    "Complete and verify the submission before the deadline"
+  ],
+  "rules": [
+    "Treat OpenAI Build Week as the highest-priority active mission until the submission is completed or the user explicitly changes the active mission.",
+    "Every autonomous KAP job must directly advance the OpenAI Build Week submission or remove a demonstrated blocker to it.",
+    "Do not resume general Mission Control dashboard development unless that work is required for the competition demo or submission.",
+    "Prefer using and demonstrating existing verified Keynu capabilities over creating unrelated architecture or broad new features.",
+    "Use Codex materially in the project workflow and preserve clear evidence of what Codex helped build, because the challenge is for projects built with Codex.",
+    "Use Node.js-first architecture and prefer native Node.js APIs.",
+    "Use PowerShell only when Node.js cannot perform the required operation.",
+    "Use small independently verifiable KAP jobs.",
+    "Read back every created or modified file.",
+    "Run relevant TypeScript builds and tests after integration changes.",
+    "Do not claim completion without matching KAP REPORT evidence.",
+    "Preserve the active Keynu browser connection unless a verified restart is required.",
+    "Do not overwrite unrelated working-tree changes.",
+    "After every 10 KAP exchanges, provide the user with a concise progress summary covering accomplishments, verification results, remaining blockers, and the next submission-critical action."
+  ],
+  "updatedAt": "2026-07-18T00:00:00.000Z",
+  "architectureDecisions": [
+    {
+      "title": "Build Week is the active mission",
+      "summary": "Mission selection must keep all autonomous reasoning and execution focused on producing a verified competition submission rather than continuing lower-priority product work."
+    },
+    {
+      "title": "Existing capabilities before speculative expansion",
+      "summary": "The submission should first assemble a compelling demonstration from verified Keynu Mission Control, KAP, BrowserAgent, continuation, runtime, driver, memory, and evidence capabilities."
+    },
+    {
+      "title": "Repository-backed mission memory",
+      "summary": "The Build Week objective, rules, milestones, and next actions must be restored from repository-managed mission files rather than relying on one ChatGPT conversation."
+    },
+    {
+      "title": "Evidence-driven completion",
+      "summary": "A feature, demo step, or submission asset is complete only when runtime output, tests, readback, or another concrete artifact verifies it."
+    }
+  ],
+  "recommendedReading": [
+    {
+      "title": "OpenAI Build Week official page",
+      "path": "https://openai.com/build-week/",
+      "reason": "Defines the challenge context, requirement to build with Codex, key dates, and submission expectations.",
+      "priority": 1
+    },
+    {
+      "title": "KAP 1.0 specification",
+      "path": "docs/KAP/KAP_PROTOCOL_V1.md",
+      "reason": "Required to understand the verified AI-to-runtime workflow used in the demo.",
+      "priority": 2
+    },
+    {
+      "title": "Mission Continuation Engine",
+      "path": "docs/keynu-book/MISSION_CONTINUATION_ENGINE.md",
+      "reason": "Explains how Keynu prevents silent stopping and maintains autonomous progress.",
+      "priority": 3
+    },
+    {
+      "title": "Repository memory ADR",
+      "path": "docs/ADR/ADR-001-Repository-Memory.md",
+      "reason": "Explains how Keynu restores project context across AI conversations.",
+      "priority": 4
+    },
+    {
+      "title": "Development protocol",
+      "path": "docs/BOOK/10_DEVELOPMENT_PROTOCOL.md",
+      "reason": "Defines mandatory verification and safety practices for AI-assisted Keynu development.",
+      "priority": 5
+    }
+  ],
+  "knownLimitations": [
+    "The local .keynu mission registry may override the repository registry and must be synchronized before reconnecting BrowserAgent.",
+    "The final competition concept, judging narrative, demo scope, and submission assets have not yet been selected or completed.",
+    "The repository must preserve clear evidence of meaningful Codex usage for the Build Week project.",
+    "The remaining schedule is short, so unrelated refactoring and broad feature expansion are out of scope unless they unblock the demo."
+  ],
+  "nextActions": [
+    {
+      "priority": 1,
+      "title": "Synchronize and activate the Build Week mission locally",
+      "reason": "The local .keynu registry can override the repository and must point to openai-build-week before BrowserAgent reconnects."
+    },
+    {
+      "priority": 2,
+      "title": "Audit verified Keynu capabilities for the competition demo",
+      "reason": "The strongest submission should be based on working features and concrete evidence rather than assumptions."
+    },
+    {
+      "priority": 3,
+      "title": "Select one clear Build Week submission story",
+      "reason": "The demo, implementation, documentation, and video need one understandable user problem and value proposition."
+    },
+    {
+      "priority": 4,
+      "title": "Build and verify the minimum competition-ready demo",
+      "reason": "A reliable end-to-end demonstration is more important than general product expansion before the deadline."
+    },
+    {
+      "priority": 5,
+      "title": "Prepare and verify all submission assets",
+      "reason": "The final repository, demo video, description, evidence, and submission form must be ready before July 21."
+    }
+  ]
+}
