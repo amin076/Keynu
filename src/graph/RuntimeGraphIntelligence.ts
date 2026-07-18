@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
+  ActiveMissionResolver,
+  type ActiveMissionResolution,
+} from '../mission/ActiveMissionResolver.js';
+import { MissionRegistry } from '../mission/MissionRegistry.js';
+import { MissionStateStore } from '../mission/MissionStateStore.js';
+import {
   RuntimeGraphRecommendationService,
   type RuntimeGraphRecommendation,
 } from './RuntimeGraphRecommendationService.js';
@@ -24,18 +30,39 @@ export type RuntimeGraphEdge = {
   metadata?: JsonRecord;
 };
 
+export type RuntimeGraphMissionResolution = {
+  projectId: string | null;
+  missionId: string | null;
+  action: ActiveMissionResolution['action'];
+  stateMismatch: boolean;
+  requiresBootstrap: boolean;
+  persistedActiveProjectId?: string;
+  persistedActiveMissionId?: string;
+  diagnostics: string[];
+};
+
+export type RuntimeGraphHistoricalMission = {
+  missionId: string;
+  projectId?: string;
+  status?: string;
+  currentMilestone?: string;
+  lastJobId?: string;
+};
+
 export type RuntimeGraphSnapshot = {
   generatedAt: string;
   graphGeneratedAt: string | null;
   graphVersion: string | null;
   graphProjectRoot: string | null;
   graphSnapshotPath: string;
+  missionResolution?: RuntimeGraphMissionResolution;
   activeProjectId: string | null;
   activeMissionId: string | null;
   missionStatus: string | null;
   currentMilestone: string | null;
   lastJobId: string | null;
   runtimeState: string | null;
+  historicalMissions?: RuntimeGraphHistoricalMission[];
   nodeCount: number;
   edgeCount: number;
   nodesByType: Record<string, number>;
@@ -49,6 +76,7 @@ export type RuntimeGraphIntelligenceOptions = {
   rootDir?: string;
   missionStatePath?: string;
   graphSnapshotPath?: string;
+  activeMissionResolver?: ActiveMissionResolver;
   maxActiveNodes?: number;
   maxRecentEdges?: number;
 };
@@ -66,7 +94,7 @@ function text(value: unknown): string | null {
 function readJson(file: string): JsonRecord | null {
   if (!existsSync(file)) return null;
   try {
-    return record(JSON.parse(readFileSync(file, 'utf8')));
+    return record(JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, '')));
   } catch {
     return null;
   }
@@ -114,6 +142,7 @@ export class RuntimeGraphIntelligence {
   private readonly rootDir: string;
   private readonly missionStatePath: string;
   private readonly graphSnapshotPath: string;
+  private readonly activeMissionResolver: ActiveMissionResolver;
   private readonly maxActiveNodes: number;
   private readonly maxRecentEdges: number;
 
@@ -121,6 +150,12 @@ export class RuntimeGraphIntelligence {
     this.rootDir = options.rootDir || process.cwd();
     this.missionStatePath = options.missionStatePath || join(this.rootDir, '.keynu', 'missions', 'state.json');
     this.graphSnapshotPath = options.graphSnapshotPath || join(this.rootDir, '.keynu', 'graph', 'snapshot.json');
+    this.activeMissionResolver =
+      options.activeMissionResolver ||
+      new ActiveMissionResolver({
+        registry: new MissionRegistry(this.rootDir),
+        stateStore: new MissionStateStore(this.missionStatePath),
+      });
     this.maxActiveNodes = options.maxActiveNodes || 30;
     this.maxRecentEdges = options.maxRecentEdges || 50;
   }
@@ -129,16 +164,45 @@ export class RuntimeGraphIntelligence {
     const warnings: string[] = [];
     const missionState = readJson(this.missionStatePath);
     const graphState = readJson(this.graphSnapshotPath);
+    const resolution = this.activeMissionResolver.resolve();
+    const resolvedBlocked = resolution.action === 'BLOCKED';
+
     if (!missionState) warnings.push('Mission state is missing or invalid: ' + this.missionStatePath);
     if (!graphState) warnings.push('Graph snapshot is missing or invalid: ' + this.graphSnapshotPath);
+    if (resolvedBlocked) warnings.push(...resolution.diagnostics);
+    if (resolution.stateMismatch) warnings.push(...resolution.diagnostics);
 
-    const activeProjectId = text(missionState?.activeProjectId);
-    const activeMissionId = text(missionState?.activeMissionId);
+    const activeProjectId = resolvedBlocked ? null : resolution.projectId;
+    const activeMissionId = resolvedBlocked ? null : resolution.missionId;
     const missions = record(missionState?.missions);
     const activeMission = activeMissionId ? record(missions?.[activeMissionId]) : null;
+    const historicalMissions = Object.entries(missions ?? {})
+      .map(([missionId, value]): RuntimeGraphHistoricalMission | null => {
+        const item = record(value);
+        if (!item) return null;
+        return {
+          missionId,
+          projectId: text(item.projectId) || undefined,
+          status: text(item.status) || undefined,
+          currentMilestone: text(item.currentMilestone) || undefined,
+          lastJobId: text(item.lastJobId) || undefined,
+        };
+      })
+      .filter((item): item is RuntimeGraphHistoricalMission => item !== null);
     const nodes = Array.isArray(graphState?.nodes) ? graphState.nodes.map(normalizeNode).filter((item): item is RuntimeGraphNode => item !== null) : [];
     const edges = Array.isArray(graphState?.edges) ? graphState.edges.map(normalizeEdge).filter((item): item is RuntimeGraphEdge => item !== null) : [];
-    const activeNodes = nodes.filter((node) => node.status === 'ACTIVE' || node.status === 'RUNNING' || node.id === activeMissionId || node.metadata?.missionId === activeMissionId).slice(0, this.maxActiveNodes);
+    const activeNodes = nodes.filter((node) => {
+      if (node.id === activeMissionId || node.metadata?.missionId === activeMissionId) {
+        return true;
+      }
+
+      if (node.status !== 'ACTIVE' && node.status !== 'RUNNING') {
+        return false;
+      }
+
+      const nodeMissionId = text(node.metadata?.missionId);
+      return !nodeMissionId || nodeMissionId === activeMissionId;
+    }).slice(0, this.maxActiveNodes);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -146,12 +210,23 @@ export class RuntimeGraphIntelligence {
       graphVersion: text(graphState?.version),
       graphProjectRoot: text(graphState?.projectRoot),
       graphSnapshotPath: this.graphSnapshotPath,
+      missionResolution: {
+        projectId: resolvedBlocked ? null : resolution.projectId,
+        missionId: resolvedBlocked ? null : resolution.missionId,
+        action: resolution.action,
+        stateMismatch: resolution.stateMismatch,
+        requiresBootstrap: resolution.requiresBootstrap,
+        persistedActiveProjectId: resolution.persistedActiveProjectId,
+        persistedActiveMissionId: resolution.persistedActiveMissionId,
+        diagnostics: [...resolution.diagnostics],
+      },
       activeProjectId,
       activeMissionId,
       missionStatus: text(activeMission?.status),
       currentMilestone: text(activeMission?.currentMilestone),
       lastJobId: text(activeMission?.lastJobId),
       runtimeState: text(activeMission?.runtimeState) || text(missionState?.runtimeState),
+      historicalMissions,
       nodeCount: nodes.length,
       edgeCount: edges.length,
       nodesByType: counts(nodes, (node) => node.type),

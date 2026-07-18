@@ -11,6 +11,10 @@ export type ActiveMissionSelection = {
   mission: MissionDefinition;
 };
 
+function readJsonFile<T>(path: string): T {
+  return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, "")) as T;
+}
+
 export class MissionRegistry {
   private readonly localRegistryPath: string;
   private readonly repositoryRegistryPath: string;
@@ -42,9 +46,7 @@ export class MissionRegistry {
       );
     }
 
-    const parsed = JSON.parse(
-      readFileSync(registryPath, "utf8"),
-    ) as MissionRegistryData;
+    const parsed = readJsonFile<MissionRegistryData>(registryPath);
 
     if (parsed.version !== "1.0" || !Array.isArray(parsed.projects)) {
       throw new Error("Mission registry is invalid.");
@@ -99,9 +101,7 @@ export class MissionRegistry {
       );
     }
 
-    const mission = JSON.parse(
-      readFileSync(missionPath, "utf8"),
-    ) as MissionDefinition;
+    const mission = readJsonFile<MissionDefinition>(missionPath);
 
     this.validateMission(project, mission);
     return mission;

@@ -8,9 +8,26 @@ import { VerificationReportIntegration } from "../verification/VerificationRepor
 import { MissionManager } from "../mission/MissionManager.js";
 import { BrowserContinuationCoordinator } from "../mission/BrowserContinuationCoordinator.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
-import { SessionStore } from "../session/index.js";
+import { SessionStore, type KeynuSessionPatch } from "../session/index.js";
 import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
 import { serializeBrowserReport } from "./BrowserReportDelivery.js";
+
+export function createMissionAcknowledgementSessionPatch(
+  acknowledgement: MissionAckPayload,
+  acknowledgedAt = new Date().toISOString(),
+): KeynuSessionPatch {
+  return {
+    memoryRestored: true,
+    missionProjectId: acknowledgement.payload.projectId,
+    missionId: acknowledgement.payload.missionId,
+    missionBootstrapId: acknowledgement.payload.acknowledgedBootstrapId,
+    missionMemoryRevision:
+      acknowledgement.payload.acknowledgedMemoryRevision,
+    missionAcknowledgedAt: acknowledgedAt,
+    missionRestorationStaleReason: undefined,
+    runtimeState: "idle",
+  };
+}
 
 export class BrowserAgent {
   private readonly processedJobIds = new Set<string>();
@@ -79,11 +96,11 @@ export class BrowserAgent {
             kap as MissionAckPayload,
           );
 
-          new SessionStore().patch({
-            memoryRestored: true,
-            missionAcknowledgedAt: new Date().toISOString(),
-            runtimeState: "idle",
-          });
+          new SessionStore().patch(
+            createMissionAcknowledgementSessionPatch(
+              kap as MissionAckPayload,
+            ),
+          );
 
           console.log(
             `[agent] Mission acknowledgement accepted for '${state.missionId}'.`,

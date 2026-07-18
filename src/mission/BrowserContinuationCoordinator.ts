@@ -1,6 +1,7 @@
-﻿import { ContinuationDeliveryService } from './ContinuationDeliveryService.js';
+import { ActiveMissionResolver } from './ActiveMissionResolver.js';
+import { ContinuationDeliveryService } from './ContinuationDeliveryService.js';
 import { ContinuationStore } from './ContinuationStore.js';
-import { MissionManager } from './MissionManager.js';
+import { MissionStateStore } from './MissionStateStore.js';
 import type { ContinuationContract } from './ContinuationTypes.js';
 
 export type BrowserContinuationMissionContext = {
@@ -31,6 +32,8 @@ export type BrowserContinuationResult = {
 export type BrowserContinuationCoordinatorOptions = {
   continuationStore?: ContinuationStore;
   deliveryService?: ContinuationDeliveryService;
+  activeMissionResolver?: ActiveMissionResolver;
+  missionStateStore?: MissionStateStore;
 };
 
 function normalizeStatus(value: string): string {
@@ -40,20 +43,55 @@ function normalizeStatus(value: string): string {
 export class BrowserContinuationCoordinator {
   private readonly continuationStore: ContinuationStore;
   private readonly deliveryService: ContinuationDeliveryService;
+  private readonly activeMissionResolver: ActiveMissionResolver;
+  private readonly missionStateStore: MissionStateStore;
 
   constructor(options: BrowserContinuationCoordinatorOptions = {}) {
     this.continuationStore =
       options.continuationStore || new ContinuationStore();
     this.deliveryService =
       options.deliveryService || new ContinuationDeliveryService();
+    this.activeMissionResolver =
+      options.activeMissionResolver || new ActiveMissionResolver();
+    this.missionStateStore =
+      options.missionStateStore || new MissionStateStore();
   }
 
   async continueAfterReport(
     context: BrowserContinuationMissionContext,
     sendMessage: (message: string) => Promise<void>,
   ): Promise<BrowserContinuationResult> {
-    const persistedMission = new MissionManager().getStatus();
-    if (persistedMission.missionStatus === 'COMPLETED') {
+    const resolvedMission = this.activeMissionResolver.resolve();
+
+    if (resolvedMission.action === 'BLOCKED') {
+      return {
+        missionId: context.missionId,
+        jobId: context.jobId,
+        decision: 'WAITING_AI',
+        deliveryStatus: 'SKIPPED_POLICY',
+        requestId: `blocked-${context.missionId}`,
+        resumeToken: '',
+        reason: `SKIPPED_ACTIVE_MISSION_UNRESOLVED: ${resolvedMission.diagnostics.join(' ')}`,
+      };
+    }
+
+    if (context.missionId !== resolvedMission.missionId) {
+      return {
+        missionId: context.missionId,
+        jobId: context.jobId,
+        decision: 'WAITING_AI',
+        deliveryStatus: 'SKIPPED_POLICY',
+        requestId: `stale-${context.missionId}`,
+        resumeToken: '',
+        reason: `SKIPPED_NON_ACTIVE_MISSION: resolved active mission is '${resolvedMission.missionId}'.`,
+      };
+    }
+
+    const runtimeState = this.missionStateStore.getMission(
+      resolvedMission.missionId,
+    );
+
+    if (runtimeState?.status === 'COMPLETED') {
       return {
         missionId: context.missionId,
         jobId: context.jobId,
@@ -111,7 +149,7 @@ export class BrowserContinuationCoordinator {
         missionTitle: context.missionTitle,
         jobId: context.jobId,
         continuation: persisted.continuation,
-        autonomousStepCount: persisted.autonomousStepCount,
+        autonomousStepCount: context.autonomousStepCount || 0,
         maxAutonomousSteps: context.maxAutonomousSteps || 12,
       },
       sendMessage,
@@ -128,4 +166,3 @@ export class BrowserContinuationCoordinator {
     };
   }
 }
-
