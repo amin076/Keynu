@@ -13,7 +13,7 @@
     "dashboard:health": "curl http://127.0.0.1:4777/health",
     "chrome:keynu": "powershell -ExecutionPolicy Bypass -File scripts/start-keynu-chrome.ps1",
     "connect:chatgpt": "powershell -ExecutionPolicy Bypass -File scripts/connect-chatgpt.ps1",
-    "test:verification": "npm run build && node dist/verification/tests/VerificationChecks.test.js && node dist/verification/tests/VerificationPolicy.test.js && node dist/verification/tests/AutomaticReadback.test.js",
+    "test:verification": "npm run build && node dist/verification/tests/VerificationChecks.test.js && node dist/verification/tests/VerificationPolicy.test.js && node dist/verification/tests/AutomaticReadback.test.js && node dist/browser/tests/ConversationManagerSubmissionConfirmation.test.js",
     "build:dashboard-client": "esbuild src/app/graph3d/graph3dClient.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/app/public/graph3dClient.js && npm run dashboard:build",
     "build:mission-control": "esbuild src/app/react-dashboard/main.tsx --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/app/public/mission-control.js --loader:.css=css && node --input-type=module -e \"import {copyFileSync,mkdirSync} from 'node:fs';mkdirSync('dist/app/public',{recursive:true});copyFileSync('src/app/react-dashboard/index.html','dist/app/public/index.html')\"",
     "dashboard:dev": "vite --config apps/mission-control/vite.config.ts",

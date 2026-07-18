@@ -174,44 +174,116 @@ export class ConversationManager {
       },
     );
   }
-
-
   async sendMessage(message: string): Promise<void> {
-
     const input = await this.getMessageInput();
+    const messageCountBeforeSubmit = await this.page
+      .locator("[data-message-author-role]")
+      .count()
+      .catch(() => 0);
 
     await input.click({
       force: true,
     });
 
     await this.page.keyboard.insertText(message);
-
     await this.page.waitForTimeout(300);
-
     await this.submitMessage(input);
-
-    await this.confirmMessageSubmitted(input);
+    await this.confirmMessageSubmitted(input, messageCountBeforeSubmit);
 
     this.state = "ready";
   }
+  private async confirmMessageSubmitted(
+    input: Locator,
+    messageCountBeforeSubmit: number,
+  ): Promise<void> {
+    const timeoutMs = 12000;
+    const pollIntervalMs = 200;
+    const deadline = Date.now() + timeoutMs;
+    const submitButton = this.page
+      .locator(
+        'button[data-testid="send-button"], button[aria-label*="Send"], form button[type="submit"]',
+      )
+      .last();
 
+    let busyStateObserved = false;
 
-  private async confirmMessageSubmitted(input: Locator): Promise<void> {
-    await this.page.waitForFunction(
-      (element) => {
-        if (!(element instanceof HTMLElement)) return false;
+    while (Date.now() < deadline) {
+      const composerIsEmpty = await input
+        .evaluate((element) => {
+          if (
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement
+          ) {
+            return element.value.trim().length === 0;
+          }
 
-        if (element instanceof HTMLTextAreaElement) {
-          return element.value.trim().length === 0;
+          if (element instanceof HTMLElement) {
+            return (
+              element.innerText ??
+              element.textContent ??
+              ""
+            ).trim().length === 0;
+          }
+
+          return false;
+        })
+        .catch(() => false);
+
+      if (composerIsEmpty) {
+        return;
+      }
+
+      const currentMessageCount = await this.page
+        .locator("[data-message-author-role]")
+        .count()
+        .catch(() => messageCountBeforeSubmit);
+
+      if (currentMessageCount > messageCountBeforeSubmit) {
+        return;
+      }
+
+      const buttonExists =
+        (await submitButton.count().catch(() => 0)) > 0;
+
+      if (buttonExists) {
+        const buttonIsBusy = await submitButton
+          .evaluate((element) => {
+            if (!(element instanceof HTMLElement)) {
+              return false;
+            }
+
+            const ariaDisabled =
+              element.getAttribute("aria-disabled") === "true";
+            const disabled =
+              element instanceof HTMLButtonElement && element.disabled;
+            const state = [
+              element.getAttribute("data-state") ?? "",
+              element.getAttribute("aria-label") ?? "",
+            ]
+              .join(" ")
+              .toLowerCase();
+
+            return (
+              ariaDisabled ||
+              disabled ||
+              /stop|busy|loading|generating/.test(state)
+            );
+          })
+          .catch(() => false);
+
+        if (buttonIsBusy) {
+          busyStateObserved = true;
+        } else if (busyStateObserved) {
+          return;
         }
+      }
 
-        return (element.innerText ?? element.textContent ?? "").trim().length === 0;
-      },
-      await input.elementHandle(),
-      { timeout: 10000 },
-    ).catch(() => {
-      throw new Error("ChatGPT message submission could not be confirmed.");
-    });
+      await this.page.waitForTimeout(pollIntervalMs);
+    }
+
+    throw new Error(
+      "ChatGPT message submission could not be confirmed.",
+    );
   }
 
   private async getMessageInput(): Promise<Locator> {
