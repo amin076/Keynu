@@ -3,6 +3,11 @@ export type CommandSpec = {
   args?: string[];
   cwd?: string;
   timeoutMs?: number;
+  runAfterFailure?: boolean;
+  expectedExitCodes?: number[];
+  runtime?: 'node' | 'powershell' | 'python' | 'bash';
+  script?: string;
+  cleanup?: boolean;
 };
 
 export function isCommandSpec(value: unknown): value is CommandSpec {

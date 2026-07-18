@@ -12,6 +12,9 @@ export type KeynuSession = {
   conversationUrl?: string;
   conversationId?: string;
   memoryRestored: boolean;
+  missionBootstrapSentAt?: string;
+  missionBootstrapConversationUrl?: string;
+  missionAcknowledgedAt?: string;
   runtimeState: KeynuRuntimeState;
   lastJobId?: string;
   lastReportId?: string;

@@ -23,13 +23,29 @@ export type KapCommandJob = {
   jobId: string;
   cwd: string;
   commands: CommandSpec[];
+  continueOnError?: boolean;
 };
 
 export async function executeKapCommandJob(job: KapCommandJob) {
-  const rawResults = [];
+  const rawResults: any[] = [];
 
+  let commandChainFailed = false;
   for (const command of job.commands) {
-    rawResults.push(await executeCommand(command, job.cwd));
+    if (commandChainFailed && job.continueOnError !== true && command.runAfterFailure !== true) {
+      rawResults.push({
+        command: command.command,
+        args: command.args ?? [],
+        ok: false,
+        blocked: true,
+        skipped: true,
+        error: "Skipped because a previous command failed",
+      });
+      continue;
+    }
+
+    const result = await executeCommand(command, job.cwd);
+    rawResults.push(result);
+    if (!result.ok) commandChainFailed = true;
   }
 
   const ok = rawResults.every((result) => result.ok);
@@ -71,7 +87,12 @@ export async function routeKapJob(job: KapJob) {
       throw new Error('target=commands requires payload.cwd and payload.commands');
     }
 
-    return executeKapCommandJob({ jobId: job.id, cwd, commands });
+    return executeKapCommandJob({
+      jobId: job.id,
+      cwd,
+      commands,
+      continueOnError: job.payload.continueOnError === true,
+    });
   }
 
   if (job.payload.target === 'filesystem') {

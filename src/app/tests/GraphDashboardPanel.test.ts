@@ -1,0 +1,10 @@
+import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+const html=readFileSync("src/app/dashboardHtml.ts","utf8");
+assert(html.includes('data-panel="graph"'));
+assert(html.includes('id="graphNodeCount"'));
+assert(html.includes('/api/graph/summary'));
+assert(html.includes('/api/graph/nodes?limit=20'));
+assert(html.includes('id="graphNodeKinds"'));
+assert(html.includes('id="graphNodes"'));
+console.log("Graph Dashboard panel tests passed.");

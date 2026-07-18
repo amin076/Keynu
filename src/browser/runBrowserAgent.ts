@@ -11,7 +11,7 @@ if (!conversationUrl) {
   process.exit(1);
 }
 
-sessionStore.patch({ conversationUrl });
+
 
 const app = new BrowserAgentApp({ conversationUrl });
 await app.start();

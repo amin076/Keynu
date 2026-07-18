@@ -1,0 +1,12 @@
+import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+const html=readFileSync("src/app/dashboardHtml.ts","utf8");
+assert(html.includes('id="graphSvg"'));
+assert(html.includes('id="graphSearch"'));
+assert(html.includes('id="graphKind"'));
+assert(html.includes('function renderGraph'));
+assert(html.includes('function loadGraphVisualization'));
+assert(html.includes('/api/graph/effective/edges?limit=150'));
+assert(html.includes("data-node-id"));
+assert(html.includes("graph-node selected" )===false);
+console.log("Interactive Graph visualization tests passed.");
