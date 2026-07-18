@@ -7,18 +7,26 @@ try {
   const bootstrap = fixture.manager.prepare();
   const continuation = bootstrap.payload.context.continuation;
 
+  assert.equal(bootstrap.payload.missionId, "openai-build-week");
   assert.equal(
     continuation.currentMilestone,
-    "Graph-driven runtime intelligence",
+    "Define the winning submission concept and minimum competition-ready demo",
   );
   assert.deepEqual(
     continuation.pendingMilestones,
-    ["Graph-driven runtime intelligence"],
+    [
+      "Audit the current working Keynu capabilities that can be demonstrated without speculative rebuilding",
+      "Choose one clear competition story and user problem",
+      "Build and verify the minimum competition-ready demo",
+      "Prepare the demo script and recording",
+      "Prepare submission description, evidence, and repository documentation",
+      "Complete and verify the submission before the deadline",
+    ],
   );
   assert(continuation.architectureDecisions.length >= 4);
   assert.equal(
     continuation.recommendedReading[0]?.path,
-    "docs/KAP/KAP_PROTOCOL_V1.md",
+    "https://openai.com/build-week/",
   );
   assert.equal(
     continuation.knownLimitations.some((item) =>
@@ -28,11 +36,11 @@ try {
   );
   assert.equal(
     continuation.nextActions[0]?.title,
-    "Build effective graph state projection",
+    "Synchronize and activate the Build Week mission locally",
   );
   assert.equal(
     bootstrap.payload.context.openTasks[0],
-    "Graph-driven runtime intelligence",
+    "Audit the current working Keynu capabilities that can be demonstrated without speculative rebuilding",
   );
 
   console.log("Project Continuation Bootstrap tests passed.");

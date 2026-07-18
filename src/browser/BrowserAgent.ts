@@ -1,7 +1,7 @@
 import type { Runtime } from "../core/Runtime.js";
-import { extractKapEnvelope } from "../kap/KapExtractor.js";
 import { createKapErrorReport } from "../kap/KapReport.js";
 import { routeKapJob } from "../runtime/kap-job-router.js";
+import { ProviderRuntime } from "../runtime/ProviderRuntime.js";
 import { kapJobToTask } from "../kap/KapTaskAdapter.js";
 import { BrowserDriver } from "./BrowserDriver.js";
 import { VerificationReportIntegration } from "../verification/VerificationReportIntegration.js";
@@ -11,6 +11,7 @@ import type { MissionAckPayload } from "../mission/MissionTypes.js";
 import { SessionStore, type KeynuSessionPatch } from "../session/index.js";
 import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
 import { serializeBrowserReport } from "./BrowserReportDelivery.js";
+import type { ProviderResponse } from "../providers/api/ProviderResponse.js";
 
 export function createMissionAcknowledgementSessionPatch(
   acknowledgement: MissionAckPayload,
@@ -36,6 +37,7 @@ export class BrowserAgent {
   private readonly missionManager = new MissionManager();
   private readonly continuationCoordinator = new BrowserContinuationCoordinator();
   private readonly graphTracer = new RuntimeGraphTracer();
+  private readonly providerRuntime = new ProviderRuntime();
 
   constructor(
     private readonly browser: BrowserDriver,
@@ -53,7 +55,20 @@ export class BrowserAgent {
 
       console.log("[agent] Assistant message received.");
 
-      const kap = extractKapEnvelope(messageText) as any;
+      const providerResponse: ProviderResponse = {
+        id: `browser-agent-message-${Date.now()}`,
+        requestId: "browser-agent-conversation",
+        providerId: "browser-agent-chatgpt",
+        content: messageText,
+        createdAt: new Date().toISOString(),
+      };
+      const runtimeResult = await this.providerRuntime.execute(
+        providerResponse,
+        {
+          source: "browser-agent",
+        },
+      );
+      const kap = runtimeResult.items[0]?.envelope as any;
 
       if (kap?.type === "JOB") {
         console.log(`[agent] KAP job extracted: ${kap.id}`);

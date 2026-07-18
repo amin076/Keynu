@@ -5,6 +5,7 @@ import { validateCommandSafety } from './CommandSafety.js';
 import { createTemporaryScript, isScriptRuntime, removeTemporaryScript } from './ScriptRunner.js';
 
 function normalizeWindowsCommand(command: string): string {
+  if (command.toLowerCase() === 'node') return process.execPath;
   if (process.platform !== 'win32') return command;
   const lowered = command.toLowerCase();
   if (lowered === 'npm') return 'npm.cmd';
@@ -55,7 +56,7 @@ export async function executeCommand(
             ],
           }
         : {
-            command: spec.runtime,
+            command: spec.runtime === 'node' ? process.execPath : spec.runtime,
             args: [temporaryScript.scriptFile, ...(spec.args || [])],
           };
 

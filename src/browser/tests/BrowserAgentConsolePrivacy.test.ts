@@ -8,5 +8,7 @@ assert(!source.includes("[agent] Message preview:"));
 assert(!source.includes("messageText.slice("));
 assert(source.includes("[agent] Assistant message received."));
 assert(source.includes("[agent] KAP job extracted:"));
+assert(source.includes("new ProviderRuntime()"));
+assert(!source.includes("extractKapEnvelope("));
 
 console.log("BrowserAgent console privacy tests passed.");

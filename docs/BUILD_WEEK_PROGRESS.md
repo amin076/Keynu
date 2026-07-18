@@ -48,6 +48,17 @@ node dist/providers/openai/runOpenAISmokeTest.js
 - No real OpenAI API call has been performed yet.
 - Automatic provider routing is not implemented yet.
 
+### Phase E - Provider Response Runtime
+
+- Implemented and ready for the BW-005-COMMIT checkpoint.
+- Added `ProviderRuntime` as the reusable provider response pipeline.
+- Moved canonical generic KAP extraction to `KapInterpreter`.
+- Added `KapValidator`, `RuntimeDispatcher`, `RuntimeResult`, `RuntimeEvent`, execution context, and execution status models.
+- Refactored BrowserAgent to process assistant messages through `ProviderRuntime.execute()`.
+- Kept OpenAIProvider unchanged; OpenAI still returns `ProviderResponse`.
+- Preserved `KapExtractor` as a compatibility adapter over the new interpreter and validator.
+- Added focused runtime tests for normal KAP blocks, `id="..."` metadata, whitespace, multiple blocks, malformed JSON, invalid KAP envelopes, no-KAP responses, JOB, REPORT, ERROR, BrowserAgent compatibility, OpenAI compatibility, deterministic event ordering, and validation-before-dispatch.
+
 ## Current Architecture
 
 ```text
@@ -62,14 +73,18 @@ Provider Composition and Registry
   +-- OpenAIProvider --> OpenAI API
   |
 Provider Response
+  |
+Provider Runtime
 ```
 
 The next missing runtime boundary is:
 
 ```text
 ProviderResponse
-  -> generic KAP interpretation
-  -> Runtime dispatch
+  -> ProviderRuntime
+  -> KapInterpreter
+  -> KapValidator
+  -> RuntimeDispatcher
   -> execution result
   -> continued AI interaction
 ```
@@ -79,9 +94,10 @@ ProviderResponse
 - TypeScript compilation passed using the local Node runtime.
 - Provider tests passed.
 - BrowserAgent regression tests passed.
-- Mission tests passed.
+- Mission tests passed after stale active-mission expectations were updated for OpenAI Build Week.
 - The optional OpenAI live smoke test was skipped.
 - No real OpenAI API request was made.
+- The Playwright contenteditable composer test is environment-blocked when the local Playwright Chromium executable is missing.
 
 `npm run build` was attempted, but `npm` was not available on the PowerShell `PATH`. Equivalent local Node build commands passed:
 
@@ -93,6 +109,6 @@ node node_modules/vite/bin/vite.js build --config apps/mission-control/vite.conf
 
 ## Next Planned Phase
 
-Phase E: Provider Response Runtime and KAP execution boundary.
+Phase F: Provider response execution integration after Phase E review.
 
-Phase E is not implemented yet.
+Phase F is not implemented yet.
