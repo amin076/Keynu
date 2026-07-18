@@ -5,6 +5,7 @@ import { routeKapJob } from "../runtime/kap-job-router.js";
 import { kapJobToTask } from "../kap/KapTaskAdapter.js";
 import { BrowserDriver } from "../browser/BrowserDriver.js";
 import { VerificationRuntimeAdapter } from "../verification/VerificationRuntimeAdapter.js";
+import { MissionManager } from "../mission/MissionManager.js";
 
 export class BrowserAgent {
   private readonly processedJobIds = new Set<string>();
@@ -41,6 +42,30 @@ export class BrowserAgent {
       }
 
       this.processedJobIds.add(kap.id);
+
+      const terminalKapTypes = new Set([
+        "WAITING_USER",
+        "WAITING_EXTERNAL_SYSTEM",
+        "BLOCKED",
+        "COMPLETED",
+        "FAILED",
+      ]);
+
+      const terminalKapType = String(kap.type);
+
+      if (terminalKapTypes.has(terminalKapType)) {
+        if (terminalKapType === "COMPLETED") {
+          const missionManager = new MissionManager();
+          const status = missionManager.getStatus();
+          if (status.missionStatus !== "COMPLETED") {
+            missionManager.complete();
+          }
+        }
+        await watcher.markReported(messageText);
+        continue;
+      }
+
+
 
       try {
         if ((kap as any).payload?.target === "powershell" || (kap as any).payload?.target === "filesystem") {

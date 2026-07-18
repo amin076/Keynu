@@ -7,6 +7,11 @@ export type KapMessageType =
   | "REPORT"
   | "ERROR"
   | "CONTROL"
+  | "WAITING_USER"
+  | "WAITING_EXTERNAL_SYSTEM"
+  | "BLOCKED"
+  | "COMPLETED"
+  | "FAILED"
   | "CAPABILITIES";
 
 export type KapRetryPolicy = {

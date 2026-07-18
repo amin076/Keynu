@@ -1,4 +1,5 @@
 ﻿import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { renderDashboardHtml } from "./dashboardHtml.js";
@@ -228,7 +229,163 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
   const server = createServer(async (request, response) => {
     try {
       const path = getPath(request);
-      const handledByDashboardApi = await handleDashboardApi(request, response);
+      const handledByDashboardApi = await handleDashboardApi(request, response, {
+        getDrivers: () => options.driverManager?.getDriverSummaries() ?? [],
+        getProcesses: async () => {
+          const result = await handleProcessManagerPayload({ processAction: "list", cwd: process.cwd() });
+          const payload = result as unknown as Record<string, unknown>;
+          const raw = Array.isArray(payload.processes)
+            ? payload.processes
+            : Array.isArray(payload.items)
+              ? payload.items
+              : Array.isArray(result)
+                ? result
+                : [];
+          return raw
+            .map((entry) => {
+              const process = entry as Record<string, unknown>;
+              const pid = Number(process.pid ?? process.processId ?? process.ProcessId);
+              if (!Number.isFinite(pid)) return null;
+              const parentPid = Number(process.parentPid ?? process.parentProcessId ?? process.ParentProcessId);
+              return {
+                pid,
+                parentPid: Number.isFinite(parentPid) ? parentPid : null,
+                name: String(process.name ?? process.processName ?? process.Name ?? "Unknown process"),
+                commandLine: String(process.commandLine ?? process.CommandLine ?? ""),
+                status: String(process.status ?? process.Status ?? "Running"),
+              };
+            })
+            .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+            .filter((entry) => {
+              const searchable = (entry.name + " " + entry.commandLine).toLowerCase();
+              return searchable.includes("keynu") || searchable.includes("browseragent") || searchable.includes("runbrowseragent") || searchable.includes("mission-control") || searchable.includes("dist/index.js");
+            });
+        },
+        getGitSummary: () => {
+          const runGit = (args: string[]) => execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8" }).trim();
+          const branch = runGit(["branch", "--show-current"]);
+          const lines = runGit(["status", "--short"]).split(/\r?\n/).filter(Boolean);
+          const files = lines.map((line) => ({ indexStatus: line[0] ?? " ", workTreeStatus: line[1] ?? " ", path: line.slice(3) }));
+          const log = runGit(["log", "-10", "--pretty=format:%H%x09%h%x09%an%x09%aI%x09%s"]);
+          const recentCommits = log ? log.split(/\r?\n/).map((line) => { const [hash, shortHash, author, authoredAt, ...subject] = line.split("\t"); return { hash: hash ?? "", shortHash: shortHash ?? "", author: author ?? "", authoredAt: authoredAt ?? "", subject: subject.join("\t") }; }) : [];
+          return { branch: branch || "DETACHED", detached: !branch, clean: files.length === 0, stagedCount: files.filter((f) => f.indexStatus !== " " && f.indexStatus !== "?").length, modifiedCount: files.filter((f) => f.workTreeStatus !== " " && f.workTreeStatus !== "?").length, untrackedCount: files.filter((f) => f.indexStatus === "?" && f.workTreeStatus === "?").length, files, recentCommits };
+        },
+        getReports: () => {
+          const roots = [
+            join(process.cwd(), ".keynu"),
+            join(process.cwd(), "data"),
+            join(process.cwd(), "runtime"),
+            join(process.cwd(), "reports"),
+            join(process.cwd(), "logs"),
+          ];
+          const files: string[] = [];
+          const visit = (directory: string, depth = 0) => {
+            if (depth > 7 || !existsSync(directory) || files.length >= 500) return;
+            for (const name of readdirSync(directory)) {
+              if (files.length >= 500) break;
+              const path = join(directory, name);
+              let stats;
+              try { stats = statSync(path); } catch { continue; }
+              if (stats.isDirectory()) { visit(path, depth + 1); continue; }
+              if (/\.json$/i.test(name) && /report|certificate|execution|evidence|mission|kap/i.test(path)) files.push(path);
+            }
+          };
+          roots.forEach((root) => visit(root));
+          const reports = [];
+          for (const path of files) {
+            try {
+              const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+              const payload = (parsed.payload ?? {}) as Record<string, unknown>;
+              const verification = (payload.verification ?? parsed.verification ?? {}) as Record<string, unknown>;
+              const certificate = (payload.certificate ?? parsed.certificate ?? {}) as Record<string, unknown>;
+              const id = String(parsed.id ?? payload.id ?? "");
+              const type = String(parsed.type ?? payload.type ?? "");
+              const looksLikeEvidence = /report|certificate|error/i.test(type) || /report|certificate|error/i.test(id) || Boolean(payload.jobId ?? parsed.jobId);
+              if (!looksLikeEvidence) continue;
+              reports.push({
+                id: id || relative(process.cwd(), path),
+                jobId: String(payload.jobId ?? parsed.jobId ?? ""),
+                type: type || "REPORT",
+                status: String(payload.status ?? parsed.status ?? "UNKNOWN"),
+                createdAt: String(parsed.createdAt ?? payload.createdAt ?? ""),
+                target: String(payload.target ?? parsed.target ?? ""),
+                verificationStatus: verification.status ? String(verification.status) : null,
+                certificateStatus: certificate.status ? String(certificate.status) : null,
+                sourcePath: relative(process.cwd(), path).replace(/\\/g, "/"),
+              });
+            } catch { continue; }
+          }
+          return reports
+            .sort((left, right) => Date.parse(right.createdAt || "0") - Date.parse(left.createdAt || "0"))
+            .slice(0, 200);
+        },
+        getMemory: () => {
+          const roots = [
+            join(process.cwd(), ".keynu"),
+            join(process.cwd(), "data"),
+            join(process.cwd(), "runtime"),
+            join(process.cwd(), "memory"),
+            join(process.cwd(), "state"),
+            join(process.cwd(), "missions"),
+          ];
+          const files: string[] = [];
+          const visit = (directory: string, depth = 0) => {
+            if (depth > 8 || !existsSync(directory) || files.length >= 500) return;
+            for (const name of readdirSync(directory)) {
+              if (files.length >= 500) break;
+              const path = join(directory, name);
+              let stats;
+              try { stats = statSync(path); } catch { continue; }
+              if (stats.isDirectory()) { visit(path, depth + 1); continue; }
+              if (/\.json$/i.test(name) && /memory|state|checkpoint|continuation|resume|mission|knowledge|context|recovery/i.test(path)) files.push(path);
+            }
+          };
+          roots.forEach((root) => visit(root));
+          const summaries = [];
+          for (const path of files) {
+            try {
+              const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+              const records = Array.isArray(parsed) ? parsed : [parsed];
+              for (let index = 0; index < records.length && summaries.length < 250; index += 1) {
+                const record = records[index];
+                if (!record || typeof record !== "object") continue;
+                const value = record as Record<string, unknown>;
+                const payload = value.payload && typeof value.payload === "object" ? value.payload as Record<string, unknown> : {};
+                const continuation = payload.continuation && typeof payload.continuation === "object" ? payload.continuation as Record<string, unknown> : {};
+                const missionId = value.missionId ?? payload.missionId ?? continuation.missionId;
+                const resumeToken = value.resumeToken ?? payload.resumeToken ?? continuation.resumeToken;
+                const autonomousStep = Number(value.autonomousStep ?? payload.autonomousStep ?? continuation.autonomousStep);
+                const updatedAt = value.updatedAt ?? value.createdAt ?? payload.updatedAt ?? payload.createdAt;
+                const source = relative(process.cwd(), path).replace(/\\/g, "/");
+                const searchable = (source + " " + Object.keys(value).join(" ")).toLowerCase();
+                const category = searchable.includes("continuation") || searchable.includes("resume")
+                  ? "continuation"
+                  : searchable.includes("mission")
+                    ? "mission-state"
+                    : searchable.includes("knowledge") || searchable.includes("context")
+                      ? "knowledge-memory"
+                      : searchable.includes("checkpoint") || searchable.includes("recovery")
+                        ? "checkpoint"
+                        : "runtime-state";
+                summaries.push({
+                  id: String(value.id ?? value.missionId ?? source + "#" + index),
+                  category,
+                  missionId: missionId ? String(missionId) : null,
+                  status: value.status || payload.status ? String(value.status ?? payload.status) : null,
+                  updatedAt: updatedAt ? String(updatedAt) : null,
+                  resumeTokenPresent: Boolean(resumeToken),
+                  autonomousStep: Number.isFinite(autonomousStep) ? autonomousStep : null,
+                  keyCount: Object.keys(value).length,
+                  sourcePath: source,
+                });
+              }
+            } catch { continue; }
+          }
+          return summaries
+            .sort((left, right) => Date.parse(right.updatedAt || "0") - Date.parse(left.updatedAt || "0"))
+            .slice(0, 250);
+        },
+      });
       if (handledByDashboardApi) {
         return;
       }
@@ -239,7 +396,35 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
       }
 
       if (path === "/") {
-        sendHtml(response, 200, renderDashboardHtml());
+        sendHtml(response, 200, readFileSync(join(process.cwd(),'dist/app/public/index.html'),'utf8'));
+        return;
+      }
+
+      if (path === "/mission-control.js") {
+        const assetPath = join(process.cwd(), "dist", "app", "public", "mission-control.js");
+        if (!existsSync(assetPath)) {
+          sendJson(response, 404, { ok: false, error: "Mission Control JavaScript asset not found" });
+          return;
+        }
+        response.writeHead(200, {
+          "content-type": "application/javascript; charset=utf-8",
+          "cache-control": "no-cache"
+        });
+        response.end(readFileSync(assetPath));
+        return;
+      }
+
+      if (path === "/mission-control.css") {
+        const assetPath = join(process.cwd(), "dist", "app", "public", "mission-control.css");
+        if (!existsSync(assetPath)) {
+          sendJson(response, 404, { ok: false, error: "Mission Control CSS asset not found" });
+          return;
+        }
+        response.writeHead(200, {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "no-cache"
+        });
+        response.end(readFileSync(assetPath));
         return;
       }
 
@@ -553,6 +738,7 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
     }),
   };
 }
+
 
 
 

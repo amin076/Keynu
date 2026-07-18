@@ -152,6 +152,11 @@ export class MissionStateStore {
   }
 
   recordJob(missionId: string, jobId: string): MissionRuntimeState {
+    // preserve terminal COMPLETED state
+    const existing = this.read().missions[missionId];
+    if (existing?.status === "COMPLETED") {
+      return existing;
+    }
     return this.updateMission(missionId, {
       lastJobId: jobId,
       status: "ACTIVE",

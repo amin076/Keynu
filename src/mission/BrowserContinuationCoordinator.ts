@@ -1,5 +1,6 @@
-import { ContinuationDeliveryService } from './ContinuationDeliveryService.js';
+﻿import { ContinuationDeliveryService } from './ContinuationDeliveryService.js';
 import { ContinuationStore } from './ContinuationStore.js';
+import { MissionManager } from './MissionManager.js';
 import type { ContinuationContract } from './ContinuationTypes.js';
 
 export type BrowserContinuationMissionContext = {
@@ -51,6 +52,19 @@ export class BrowserContinuationCoordinator {
     context: BrowserContinuationMissionContext,
     sendMessage: (message: string) => Promise<void>,
   ): Promise<BrowserContinuationResult> {
+    const persistedMission = new MissionManager().getStatus();
+    if (persistedMission.missionStatus === 'COMPLETED') {
+      return {
+        missionId: context.missionId,
+        jobId: context.jobId,
+        decision: 'COMPLETED',
+        deliveryStatus: 'SKIPPED_POLICY',
+        requestId: `terminal-${context.missionId}`,
+        resumeToken: '',
+        reason: 'SKIPPED_COMPLETED_MISSION',
+      };
+    }
+
     const reportStatus = normalizeStatus(context.reportStatus);
     const completed = reportStatus === 'COMPLETED';
 
@@ -58,12 +72,12 @@ export class BrowserContinuationCoordinator {
       ? {
           decision: 'WAITING_AI',
           reason:
-            'The previous KAP job completed successfully and the active mission requires evaluation of the next safe step.',
+            'The previous KAP job completed successfully. Evaluate the result and select a new, distinct mission step. Do not repeat the completed action.',
           nextAction:
-            context.nextAction || 'generate_next_safe_verifiable_kap_job',
+            'evaluate_completed_job_and_select_next_distinct_mission_step',
           owner: 'ai',
           missionComplete: false,
-          retryable: true,
+          retryable: false,
         }
       : {
           decision: 'WAITING_AI',
@@ -75,7 +89,7 @@ export class BrowserContinuationCoordinator {
           retryable: true,
         };
 
-    const autonomousStepCount = context.autonomousStepCount || 0;
+    const autonomousStepCount = (context.autonomousStepCount || 0) + 1;
     const consecutiveFailureCount = completed
       ? 0
       : (context.consecutiveFailureCount || 0) + 1;
@@ -114,3 +128,4 @@ export class BrowserContinuationCoordinator {
     };
   }
 }
+

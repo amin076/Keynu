@@ -152,7 +152,26 @@ export const KapCapabilitiesSchema = z.object({
     .passthrough(),
 });
 
+export const KapTerminalSchema = z.object({
+  ...BaseEnvelopeShape,
+  type: z.enum([
+    "WAITING_USER",
+    "WAITING_EXTERNAL_SYSTEM",
+    "BLOCKED",
+    "COMPLETED",
+    "FAILED",
+  ]),
+  payload: z.object({
+    missionId: NonEmptyString.optional(),
+    status: NonEmptyString.optional(),
+    reason: z.string().optional(),
+    message: z.string().optional(),
+    nextAction: z.unknown().optional(),
+  }).passthrough(),
+}).passthrough();
+
 export const KapEnvelopeSchema = z.discriminatedUnion("type", [
+  KapTerminalSchema,
   KapJobSchema,
   KapReportSchema,
   KapErrorSchema,
