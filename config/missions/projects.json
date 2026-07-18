@@ -5,7 +5,7 @@
       "id": "keynu",
       "name": "Keynu",
       "root": ".",
-      "activeMissionId": "knowledge-graph-engine"
+      "activeMissionId": "openai-build-week"
     }
   ]
 }
