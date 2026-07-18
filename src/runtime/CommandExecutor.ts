@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { CommandSpec } from './CommandSpec.js';
 import type { CommandExecutionResult } from './CommandExecutionResult.js';
 import { validateCommandSafety } from './CommandSafety.js';
+import { createTemporaryScript, isScriptRuntime, removeTemporaryScript } from './ScriptRunner.js';
 
 function normalizeWindowsCommand(command: string): string {
   if (process.platform !== 'win32') return command;
@@ -21,10 +22,65 @@ export async function executeCommand(
   spec: CommandSpec,
   defaultCwd: string,
 ): Promise<CommandExecutionResult> {
+  if (spec.command === 'script') {
+    if (!isScriptRuntime(spec.runtime)) {
+      throw new Error(
+        'Script command requires runtime: node, powershell, python, or bash.',
+      );
+    }
+
+    if (typeof spec.script !== 'string' || spec.script.trim().length === 0) {
+      throw new Error('Script command requires non-empty script source.');
+    }
+
+    const cwd = spec.cwd || defaultCwd;
+    const temporaryScript = await createTemporaryScript(
+      spec.runtime,
+      spec.script,
+      cwd,
+      spec.cleanup !== false,
+    );
+
+    const runtimeCommand =
+      spec.runtime === 'powershell'
+        ? {
+            command: 'powershell',
+            args: [
+              '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-File',
+              temporaryScript.scriptFile,
+              ...(spec.args || []),
+            ],
+          }
+        : {
+            command: spec.runtime,
+            args: [temporaryScript.scriptFile, ...(spec.args || [])],
+          };
+
+    try {
+      return await executeCommand(
+        {
+          command: runtimeCommand.command,
+          args: runtimeCommand.args,
+          cwd,
+          timeoutMs: spec.timeoutMs,
+          runAfterFailure: spec.runAfterFailure,
+        },
+        defaultCwd,
+      );
+    } finally {
+      await removeTemporaryScript(temporaryScript);
+    }
+  }
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
   const cwd = spec.cwd ?? defaultCwd;
   const args = spec.args ?? [];
+  const expectedExitCodes = spec.expectedExitCodes?.length
+    ? spec.expectedExitCodes
+    : [0];
   const safety = validateCommandSafety(spec);
 
   if (!safety.ok) {
@@ -49,7 +105,11 @@ export async function executeCommand(
     let settled = false;
     let timeoutHandle: NodeJS.Timeout | undefined;
 
-    const finish = (ok: boolean, error?: string) => {
+    const finish = (
+      ok: boolean,
+      error?: string,
+      exitCode?: number | null,
+    ) => {
       if (settled) return;
       settled = true;
 
@@ -61,6 +121,7 @@ export async function executeCommand(
         args,
         cwd,
         ok,
+        exitCode,
         stdout,
         stderr,
         error,
@@ -97,9 +158,11 @@ export async function executeCommand(
       child.on('error', (error) => finish(false, error.message));
 
       child.on('close', (code) => {
+        const ok = expectedExitCodes.includes(code ?? -1);
         finish(
-          code === 0,
-          code === 0 ? undefined : `Command exited with code ${code}`,
+          ok,
+          ok ? undefined : `Command exited with code ${code}`,
+          code,
         );
       });
     } catch (error) {

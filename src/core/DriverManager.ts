@@ -25,4 +25,16 @@ export class DriverManager {
   list(): string[] {
     return [...this.drivers.keys()].sort();
   }
+
+  getDriverSummaries(): Array<{ id: string; name: string; status: string; capabilities: string[] }> {
+    return Array.from(this.drivers.entries()).map(([id, driver]) => {
+      const record = driver as unknown as Record<string, unknown>;
+      return {
+        id: String(id),
+        name: String(record.name ?? id),
+        status: String(record.status ?? (record.ready === false ? "Unavailable" : "Registered")),
+        capabilities: Array.isArray(record.capabilities) ? record.capabilities.map(String) : [],
+      };
+    });
+  }
 }

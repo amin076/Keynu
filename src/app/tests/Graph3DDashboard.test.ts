@@ -1,0 +1,119 @@
+import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+
+const html = readFileSync("src/app/dashboardHtml.ts", "utf8");
+const server = readFileSync("src/app/dashboardServer.ts", "utf8");
+const client = readFileSync("src/app/graph3d/graph3dClient.ts", "utf8");
+
+assert(html.includes('data-panel="graph3d"'));
+assert(html.includes('id="graph3d"'));
+assert(html.includes('id="graph3dCanvas"'));
+assert(html.includes('id="graph3dStatus"'));
+assert(html.includes('/assets/graph3dClient.js'));
+assert(server.includes('/assets/graph3dClient.js'));
+assert(server.includes('text/javascript; charset=utf-8'));
+assert(client.includes('new THREE.WebGLRenderer'));
+assert(client.includes('Three.js connected'));
+assert(client.includes('nodes and'));
+assert(client.includes('edges loaded'));
+
+assert(client.includes('/api/graph/effective/nodes'));
+assert(client.includes('/api/graph/effective/edges'));
+assert(client.includes('OrbitControls'));
+assert(client.includes('createNodeMesh'));
+assert(client.includes('createEdgeLines'));
+assert(client.includes('Three.js connected'));
+
+assert(html.includes('id="graph3dSelected"'));
+assert(html.includes('id="graph3dSelectedKind"'));
+assert(html.includes('id="graph3dSelectedState"'));
+assert(html.includes('id="graph3dSelectedNeighbors"'));
+assert(client.includes('new THREE.Raycaster'));
+assert(client.includes('pointerdown'));
+assert(client.includes('showNodeIntelligence'));
+assert(client.includes('/api/graph/effective/neighbors'));
+assert(client.includes('intersectObjects'));
+
+assert(html.includes('id="graph3dSelectedImpact"'));
+assert(html.includes('id="graph3dSelectedActivity"'));
+assert(html.includes('id="graph3dImpact"'));
+assert(html.includes('id="graph3dActivity"'));
+assert(client.includes('/api/graph/effective/impact'));
+assert(client.includes('/api/graph/effective/activity'));
+assert(client.includes('impactedNodes'));
+assert(client.includes('repositoryNodeId === node.id'));
+
+assert(client.includes('Graph3DSelectionContext'));
+assert(client.includes('applySelectionHighlight'));
+assert(client.includes('relatedNodeIds'));
+assert(client.includes('material.opacity'));
+assert(client.includes('dblclick'));
+assert(client.includes('applySelectionHighlight(nodeMeshes, edgeRendering.records, null)'));
+
+assert(client.includes('Graph3DEdgeRenderRecord'));
+assert(client.includes('edgeRendering.records'));
+assert(client.includes('record.edge.source === context.selectedNodeId'));
+assert(client.includes('record.edge.target === context.selectedNodeId'));
+assert(client.includes('material.color.setHex'));
+assert(client.includes('connected ? 0x22d3ee : 0x64748b'));
+assert(client.includes('connected ? 0.95 : 0.05'));
+
+assert(html.includes('id="graph3dSearch"'));
+assert(html.includes('id="graph3dKind"'));
+assert(html.includes('id="graph3dReload"'));
+assert(client.includes('new URLSearchParams'));
+assert(client.includes('nodeQuery.set("search", search)'));
+assert(client.includes('nodeQuery.set("kind", kind)'));
+assert(client.includes('graph3dSearch'));
+assert(client.includes('graph3dKind'));
+
+assert(!client.includes('window.location.reload()'));
+assert(client.includes('activeGraph3DCleanup'));
+assert(client.includes('controls.dispose()'));
+assert(client.includes('renderer.dispose()'));
+assert(client.includes('cancelAnimationFrame'));
+assert(client.includes('startGraph3D().catch'));
+
+assert(client.includes('graph3DReloadHandler'));
+assert(client.includes('removeEventListener("click", graph3DReloadHandler)'));
+assert(client.includes('addEventListener("click", graph3DReloadHandler)'));
+
+assert(client.includes('graph3DRequestRevision'));
+assert(client.includes('requestRevision !== graph3DRequestRevision'));
+assert(client.includes('No graph nodes match the current filters'));
+assert(client.includes('event.key !== "Enter"'));
+assert(client.includes('kindSelect?.addEventListener("change"'));
+
+assert(client.includes('graph3DSearchKeyHandler'));
+assert(client.includes('graph3DKindChangeHandler'));
+assert(client.includes('removeEventListener("keydown", graph3DSearchKeyHandler)'));
+assert(client.includes('removeEventListener("change", graph3DKindChangeHandler)'));
+
+assert(html.includes('id="graph3dPrevious"'));
+assert(html.includes('id="graph3dNext"'));
+assert(html.includes('id="graph3dPageStatus"'));
+assert(html.includes('id="graph3dLoadedNodes"'));
+assert(html.includes('id="graph3dLoadedEdges"'));
+assert(client.includes('graph3DPage'));
+assert(client.includes('offset: String(Math.max(0, page - 1) * NODE_LIMIT)'));
+assert(client.includes('graph3dPrevious'));
+assert(client.includes('graph3dNext'));
+assert(client.includes('graph3dLoadedNodes'));
+assert(client.includes('graph3dLoadedEdges'));
+
+assert(client.includes('graph3DPreviousHandler'));
+assert(client.includes('graph3DNextHandler'));
+assert(client.includes('removeEventListener("click", graph3DPreviousHandler)'));
+assert(client.includes('removeEventListener("click", graph3DNextHandler)'));
+assert(client.includes('graph3DPage = 1'));
+
+assert(html.includes('id="graph3dResultRange"'));
+assert(client.includes('total?: number'));
+assert(client.includes('hasPrevious?: boolean'));
+assert(client.includes('hasNext?: boolean'));
+assert(client.includes('graph3dResultRange'));
+assert(client.includes('totalPages'));
+assert(client.includes('previousButton?.toggleAttribute("disabled"'));
+assert(client.includes('nextButton?.toggleAttribute("disabled"'));
+
+console.log("Graph 3D Dashboard tests passed.");

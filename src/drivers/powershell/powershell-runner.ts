@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { assertSafeCommand, assertSafeCwd, assertSafeRelativePath } from "./powershell-safety.js";
+import { evaluateProtectedMemoryWrite } from "../../memory/ProtectedMemoryPolicy.js";
 import type {
   PowerShellCommandResult,
   PowerShellCommandSpec,
@@ -101,13 +102,32 @@ export function writePowerShellFile(cwd: string, spec: PowerShellWriteFileSpec):
       return { path: spec.path, ok: false, error: "File already exists and overwrite=false." };
     }
 
-    mkdirSync(dirname(fullPath), { recursive: true });
-    writeFileSync(fullPath, spec.content, "utf8");
+    const existingContent = existsSync(fullPath)
+      ? readFileSync(fullPath, "utf8")
+      : undefined;
+    const decision = evaluateProtectedMemoryWrite({
+      relativePath: spec.path,
+      existingContent,
+      incomingContent: spec.content,
+      mode: spec.mode ?? spec.operation,
+      expectedSha256: spec.expectedSha256,
+      allowProtectedReplace: spec.allowProtectedReplace,
+    });
 
+    if (!decision.allowed || decision.resultingContent === undefined) {
+      return {
+        path: spec.path,
+        ok: false,
+        error: decision.reason ?? "Protected memory write was denied.",
+      };
+    }
+
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, decision.resultingContent, "utf8");
     return {
       path: spec.path,
       ok: true,
-      bytes: Buffer.byteLength(spec.content, "utf8"),
+      bytes: Buffer.byteLength(decision.resultingContent, "utf8"),
     };
   } catch (error: any) {
     return { path: spec.path, ok: false, error: error.message ?? String(error) };

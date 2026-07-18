@@ -2,12 +2,15 @@ export type PowerShellCommandSpec = {
   command: string;
   args?: string[];
   timeoutMs?: number;
+  runAfterFailure?: boolean;
 };
 
 export type PowerShellCommandResult = {
   command: string;
   args: string[];
   ok: boolean;
+  blocked?: boolean;
+  skipped?: boolean;
   stdout: string;
   stderr: string;
   error?: string;
@@ -33,6 +36,10 @@ export type PowerShellWriteFileSpec = {
   path: string;
   content: string;
   overwrite?: boolean;
+  mode?: "replace" | "append";
+  operation?: "replace" | "append";
+  expectedSha256?: string;
+  allowProtectedReplace?: boolean;
 };
 
 export type PowerShellWriteFileResult = {
@@ -48,6 +55,7 @@ export type PowerShellFileOpsJobPayload = {
   readFiles?: PowerShellReadFileSpec[];
   writeFiles?: PowerShellWriteFileSpec[];
   commands?: PowerShellCommandSpec[];
+  continueOnError?: boolean;
   includeGit?: boolean;
 };
 

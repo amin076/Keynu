@@ -19,7 +19,7 @@ export class Runtime {
       const stepStartedAt = new Date(stepStartedAtMs).toISOString();
 
       try {
-        await this.commandBus.execute(command);
+        const commandResult = await this.commandBus.execute(command);
 
         const stepFinishedAtMs = Date.now();
 
@@ -30,6 +30,7 @@ export class Runtime {
           finishedAt: new Date(stepFinishedAtMs).toISOString(),
           durationMs: stepFinishedAtMs - stepStartedAtMs,
           command,
+          result: commandResult,
         });
       } catch (error) {
         const stepFinishedAtMs = Date.now();

@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 export type PowerShellCommandSpec = {
   command: string;
   args?: string[];
+  timeoutMs?: number;
+  runAfterFailure?: boolean;
 };
 
 const dangerousCommands = new Set([

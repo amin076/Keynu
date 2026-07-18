@@ -1,0 +1,558 @@
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { Graph3DEdge, Graph3DNode } from "./Graph3DTypes.js";
+
+type GraphResponse<T> = {
+  ok?: boolean;
+  items?: T[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+};
+
+const NODE_LIMIT = 140;
+const EDGE_LIMIT = 320;
+
+let activeGraph3DCleanup: (() => void) | null = null;
+let graph3DReloadHandler: (() => void) | null = null;
+let graph3DRequestRevision = 0;
+let graph3DPage = 1;
+let graph3DSearchKeyHandler: ((event: KeyboardEvent) => void) | null = null;
+let graph3DKindChangeHandler: (() => void) | null = null;
+let graph3DPreviousHandler: (() => void) | null = null;
+let graph3DNextHandler: (() => void) | null = null;
+
+type Graph3DEdgeRenderRecord = {
+  edge: Graph3DEdge;
+  line: THREE.Line;
+};
+
+type Graph3DSelectionContext = {
+  selectedNodeId: string;
+  relatedNodeIds: Set<string>;
+};
+
+function setGraph3DText(id: string, value: unknown): void {
+  const element = document.getElementById(id);
+  if (element) element.textContent = String(value ?? "--");
+}
+
+function escapeGraph3DHtml(value: unknown): string {
+  return String(value ?? "--").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] ?? character);
+}
+
+async function showNodeIntelligence(node: Graph3DNode): Promise<void> {
+  setGraph3DText("graph3dSelected", node.path ?? node.label);
+  setGraph3DText("graph3dSelectedKind", node.kind);
+  setGraph3DText("graph3dSelectedState", node.state);
+
+  const encodedNodeId = encodeURIComponent(node.id);
+  const [neighborsResponse, impactResponse, activityResponse] = await Promise.all([
+    fetch(
+      "/api/graph/effective/neighbors?nodeId=" + encodedNodeId + "&depth=1",
+      { cache: "no-store" },
+    ),
+    fetch(
+      "/api/graph/effective/impact?nodeId=" + encodedNodeId + "&depth=4",
+      { cache: "no-store" },
+    ),
+    fetch("/api/graph/effective/activity?limit=200", {
+      cache: "no-store",
+    }),
+  ]);
+
+  if (!neighborsResponse.ok) {
+    throw new Error("Unable to load selected-node neighbors");
+  }
+  if (!impactResponse.ok) {
+    throw new Error("Unable to load selected-node impact analysis");
+  }
+  if (!activityResponse.ok) {
+    throw new Error("Unable to load selected-node activity");
+  }
+
+  const neighborsResult = await neighborsResponse.json() as {
+    nodes?: Graph3DNode[];
+  };
+  const impactResult = await impactResponse.json() as {
+    impactedNodes?: Graph3DNode[];
+  };
+  const activityResult = await activityResponse.json() as {
+    items?: Array<{
+      repositoryNodeId?: string;
+      type?: string;
+      time?: string;
+      jobId?: string;
+      path?: string;
+    }>;
+  };
+
+  const neighbors = neighborsResult.nodes ?? [];
+  const impactedNodes = impactResult.impactedNodes ?? [];
+  const activity = (activityResult.items ?? []).filter(
+    (item) => item.repositoryNodeId === node.id,
+  );
+
+  setGraph3DText("graph3dSelectedNeighbors", neighbors.length);
+  setGraph3DText("graph3dSelectedImpact", impactedNodes.length);
+  setGraph3DText("graph3dSelectedActivity", activity.length);
+
+  const related = document.getElementById("graph3dRelated");
+  if (related) {
+    related.innerHTML = neighbors.length
+      ? neighbors.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.kind) +
+          "</strong> — " +
+          escapeGraph3DHtml(item.path ?? item.label) +
+          " — " +
+          escapeGraph3DHtml(item.state) +
+          "</div>",
+        ).join("")
+      : '<div class="logline">No neighboring nodes</div>';
+  }
+
+  const impact = document.getElementById("graph3dImpact");
+  if (impact) {
+    impact.innerHTML = impactedNodes.length
+      ? impactedNodes.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.kind) +
+          "</strong> — " +
+          escapeGraph3DHtml(item.path ?? item.label) +
+          " — " +
+          escapeGraph3DHtml(item.state) +
+          "</div>",
+        ).join("")
+      : '<div class="logline">No impacted nodes</div>';
+  }
+
+  const activityContainer = document.getElementById("graph3dActivity");
+  if (activityContainer) {
+    activityContainer.innerHTML = activity.length
+      ? activity.slice(0, 20).map((item) =>
+          '<div class="logline"><strong>' +
+          escapeGraph3DHtml(item.type ?? "activity") +
+          "</strong> — " +
+          escapeGraph3DHtml(item.jobId ?? item.path ?? node.label) +
+          '<div class="small">' +
+          escapeGraph3DHtml(item.time ?? "") +
+          "</div></div>",
+        ).join("")
+      : '<div class="logline">No recent activity for this node</div>';
+  }
+}
+function colorForNode(node: Graph3DNode): number {
+  if (node.state === "failed") return 0xfb7185;
+  if (node.state === "active" || node.state === "queued") return 0xf59e0b;
+  if (node.kind === "project") return 0xa78bfa;
+  if (node.kind === "folder") return 0x22d3ee;
+  if (node.kind === "job") return 0x38bdf8;
+  if (node.kind === "command") return 0xfacc15;
+  if (node.kind === "report") return 0x4ade80;
+  return 0x22c55e;
+}
+
+function radiusForNode(node: Graph3DNode): number {
+  if (node.kind === "project") return 0.75;
+  if (node.kind === "folder") return 0.48;
+  if (node.kind === "job") return 0.4;
+  if (node.kind === "command") return 0.25;
+  return 0.3;
+}
+
+function positionNodes(nodes: Graph3DNode[]): Map<string, THREE.Vector3> {
+  const positions = new Map<string, THREE.Vector3>();
+  const count = Math.max(1, nodes.length);
+
+  nodes.forEach((node, index) => {
+    if (node.kind === "project") {
+      positions.set(node.id, new THREE.Vector3(0, 0, 0));
+      return;
+    }
+
+    const ratio = index / count;
+    const angle = ratio * Math.PI * 14;
+    const radius = 3 + Math.sqrt(index + 1) * 0.58;
+    const height = ((index % 13) - 6) * 0.52;
+
+    positions.set(
+      node.id,
+      new THREE.Vector3(
+        Math.cos(angle) * radius,
+        height,
+        Math.sin(angle) * radius,
+      ),
+    );
+  });
+
+  return positions;
+}
+
+async function readGraphData(search = "", kind = "", page = 1): Promise<{
+  nodes: Graph3DNode[];
+  edges: Graph3DEdge[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasPrevious: boolean;
+    hasNext: boolean;
+  };
+}> {
+  const nodeQuery = new URLSearchParams({
+    limit: String(NODE_LIMIT),
+    offset: String(Math.max(0, page - 1) * NODE_LIMIT),
+  });
+  if (search) nodeQuery.set("search", search);
+  if (kind) nodeQuery.set("kind", kind);
+
+  const [nodeResponse, edgeResponse] = await Promise.all([
+    fetch(`/api/graph/effective/nodes?${nodeQuery.toString()}`, {
+      cache: "no-store",
+    }),
+    fetch(`/api/graph/effective/edges?limit=${EDGE_LIMIT}`, {
+      cache: "no-store",
+    }),
+  ]);
+
+  if (!nodeResponse.ok || !edgeResponse.ok) {
+    throw new Error("Effective graph API request failed");
+  }
+
+  const nodeData = (await nodeResponse.json()) as GraphResponse<Graph3DNode>;
+  const edgeData = (await edgeResponse.json()) as GraphResponse<Graph3DEdge>;
+
+  return {
+    nodes: nodeData.items ?? [],
+    edges: edgeData.items ?? [],
+    pagination: {
+      total: nodeData.total ?? nodeData.items?.length ?? 0,
+      limit: nodeData.limit ?? NODE_LIMIT,
+      offset: nodeData.offset ?? Math.max(0, page - 1) * NODE_LIMIT,
+      hasPrevious: nodeData.hasPrevious ?? page > 1,
+      hasNext: nodeData.hasNext ?? (nodeData.items?.length ?? 0) >= NODE_LIMIT,
+    },
+  };
+}
+
+function createNodeMesh(node: Graph3DNode): THREE.Mesh {
+  const geometry = new THREE.SphereGeometry(radiusForNode(node), 16, 12);
+  const material = new THREE.MeshStandardMaterial({
+    color: colorForNode(node),
+    emissive: colorForNode(node),
+    emissiveIntensity: node.state === "active" ? 0.55 : 0.16,
+    roughness: 0.42,
+    metalness: 0.18,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.graphNode = node;
+  return mesh;
+}
+
+function applySelectionHighlight(
+  nodeMeshes: THREE.Mesh[],
+  edgeRecords: Graph3DEdgeRenderRecord[],
+  context: Graph3DSelectionContext | null,
+): void {
+  for (const mesh of nodeMeshes) {
+    const node = mesh.userData.graphNode as Graph3DNode | undefined;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    const isSelected = node?.id === context?.selectedNodeId;
+    const isRelated = node ? context?.relatedNodeIds.has(node.id) === true : false;
+    const isVisible = !context || isSelected || isRelated;
+
+    mesh.scale.setScalar(isSelected ? 1.65 : isRelated ? 1.25 : 1);
+    material.opacity = isVisible ? 1 : 0.14;
+    material.transparent = !isVisible;
+    material.emissiveIntensity = isSelected
+      ? 1
+      : isRelated
+        ? 0.45
+        : node?.state === "active"
+          ? 0.55
+          : 0.16;
+  }
+
+  for (const record of edgeRecords) {
+    const material = record.line.material as THREE.LineBasicMaterial;
+    const connected = context
+      ? record.edge.source === context.selectedNodeId ||
+        record.edge.target === context.selectedNodeId
+      : false;
+
+    material.color.setHex(connected ? 0x22d3ee : 0x64748b);
+    material.opacity = context ? (connected ? 0.95 : 0.05) : 0.34;
+    material.transparent = true;
+  }
+}
+
+function createEdgeLines(
+  edges: Graph3DEdge[],
+  positions: Map<string, THREE.Vector3>,
+): {
+  group: THREE.Group;
+  records: Graph3DEdgeRenderRecord[];
+} {
+  const group = new THREE.Group();
+  const records: Graph3DEdgeRenderRecord[] = [];
+
+  for (const edge of edges) {
+    const source = positions.get(edge.source);
+    const target = positions.get(edge.target);
+    if (!source || !target) continue;
+
+    const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x64748b,
+      transparent: true,
+      opacity: 0.34,
+    });
+    const line = new THREE.Line(geometry, material);
+    line.userData.graphEdge = edge;
+    group.add(line);
+    records.push({ edge, line });
+  }
+
+  return { group, records };
+}
+
+export async function startGraph3D(): Promise<void> {
+  const requestRevision = ++graph3DRequestRevision;
+  activeGraph3DCleanup?.();
+  activeGraph3DCleanup = null;
+
+  const container = document.getElementById("graph3dCanvas");
+  const status = document.getElementById("graph3dStatus");
+  if (!container) return;
+
+  if (status) status.textContent = "Loading effective graph…";
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x020617);
+  scene.fog = new THREE.FogExp2(0x020617, 0.018);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 3000);
+  camera.position.set(0, 11, 26);
+
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false,
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  container.replaceChildren(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 4;
+  controls.maxDistance = 90;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.3));
+  const directional = new THREE.DirectionalLight(0x9be7ff, 2.2);
+  directional.position.set(8, 14, 10);
+  scene.add(directional);
+
+  const searchInput = document.getElementById("graph3dSearch") as HTMLInputElement | null;
+  const kindSelect = document.getElementById("graph3dKind") as HTMLSelectElement | null;
+  setGraph3DText("graph3dStatus", "Loading filtered effective graph…");
+  const graph = await readGraphData(
+    searchInput?.value.trim() ?? "",
+    kindSelect?.value ?? "",
+    graph3DPage,
+  );
+  if (requestRevision !== graph3DRequestRevision) return;
+  if (graph.nodes.length === 0) {
+    container.replaceChildren();
+    setGraph3DText("graph3dStatus", "No graph nodes match the current filters");
+    return;
+  }
+  const positions = positionNodes(graph.nodes);
+  const graphGroup = new THREE.Group();
+  const nodeMeshes: THREE.Mesh[] = [];
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let selectedMesh: THREE.Mesh | null = null;
+
+  for (const node of graph.nodes) {
+    const mesh = createNodeMesh(node);
+    mesh.position.copy(positions.get(node.id) ?? new THREE.Vector3());
+    nodeMeshes.push(mesh);
+    graphGroup.add(mesh);
+  }
+
+  const edgeRendering = createEdgeLines(graph.edges, positions);
+  graphGroup.add(edgeRendering.group);
+  scene.add(graphGroup);
+
+  if (status) {
+    status.textContent =
+      `Three.js connected — ${graph.nodes.length} nodes and ${graph.edges.length} edges loaded`;
+  }
+  setGraph3DText("graph3dLoadedNodes", graph.nodes.length);
+  setGraph3DText("graph3dLoadedEdges", graph.edges.length);
+  setGraph3DText("graph3dPageNumber", graph3DPage);
+  const totalPages = Math.max(1, Math.ceil(graph.pagination.total / Math.max(1, graph.pagination.limit)));
+  const rangeStart = graph.nodes.length ? graph.pagination.offset + 1 : 0;
+  const rangeEnd = graph.pagination.offset + graph.nodes.length;
+  setGraph3DText("graph3dPageStatus", `Page ${graph3DPage} of ${totalPages}`);
+  setGraph3DText(
+    "graph3dResultRange",
+    `${rangeStart}-${rangeEnd} of ${graph.pagination.total} nodes`,
+  );
+
+  renderer.domElement.addEventListener("dblclick", () => {
+    selectedMesh = null;
+    applySelectionHighlight(nodeMeshes, edgeRendering.records, null);
+    setGraph3DText("graph3dSelected", "Click a node in the 3D graph");
+    setGraph3DText("graph3dSelectedKind", "--");
+    setGraph3DText("graph3dSelectedState", "--");
+    setGraph3DText("graph3dSelectedNeighbors", 0);
+    setGraph3DText("graph3dSelectedImpact", 0);
+    setGraph3DText("graph3dSelectedActivity", 0);
+  });
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    const bounds = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(nodeMeshes, false)[0];
+    if (!hit) return;
+
+    selectedMesh = hit.object as THREE.Mesh;
+
+    const node = selectedMesh.userData.graphNode as Graph3DNode | undefined;
+    if (node) {
+      const relatedNodeIds = new Set<string>();
+      relatedNodeIds.add(node.id);
+
+      for (const edge of graph.edges) {
+        if (edge.source === node.id) relatedNodeIds.add(edge.target);
+        if (edge.target === node.id) relatedNodeIds.add(edge.source);
+      }
+
+      applySelectionHighlight(nodeMeshes, edgeRendering.records, {
+        selectedNodeId: node.id,
+        relatedNodeIds,
+      });
+
+      showNodeIntelligence(node).catch((error) => {
+        setGraph3DText(
+          "graph3dSelected",
+          error instanceof Error ? error.message : "Node selection failed",
+        );
+      });
+    }
+  });
+
+  const resize = () => {
+    const width = Math.max(1, container.clientWidth);
+    const height = Math.max(1, container.clientHeight);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
+  };
+
+  let animationFrame = 0;
+  const animate = () => {
+    controls.update();
+    renderer.render(scene, camera);
+    animationFrame = requestAnimationFrame(animate);
+  };
+
+  activeGraph3DCleanup = () => {
+    cancelAnimationFrame(animationFrame);
+    window.removeEventListener("resize", resize);
+    controls.dispose();
+    renderer.dispose();
+    graphGroup.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+        object.geometry.dispose();
+        const material = object.material;
+        if (Array.isArray(material)) material.forEach((item) => item.dispose());
+        else material.dispose();
+      }
+    });
+  };
+
+  const reloadButton = document.getElementById("graph3dReload");
+  if (reloadButton && graph3DReloadHandler) {
+    reloadButton.removeEventListener("click", graph3DReloadHandler);
+  }
+  graph3DReloadHandler = () => {
+    startGraph3D().catch((error) => {
+      setGraph3DText(
+        "graph3dStatus",
+        error instanceof Error ? error.message : "Graph 3D reload failed",
+      );
+    });
+  };
+  reloadButton?.addEventListener("click", graph3DReloadHandler);
+  if (searchInput && graph3DSearchKeyHandler) {
+    searchInput.removeEventListener("keydown", graph3DSearchKeyHandler);
+  }
+  graph3DSearchKeyHandler = (event: KeyboardEvent) => {
+    if (event.key !== "Enter") return;
+    graph3DPage = 1;
+    graph3DReloadHandler?.();
+  };
+  searchInput?.addEventListener("keydown", graph3DSearchKeyHandler);
+
+  if (kindSelect && graph3DKindChangeHandler) {
+    kindSelect.removeEventListener("change", graph3DKindChangeHandler);
+  }
+  graph3DKindChangeHandler = () => {
+    graph3DPage = 1;
+    graph3DReloadHandler?.();
+  };
+  kindSelect?.addEventListener("change", graph3DKindChangeHandler);
+
+  const previousButton = document.getElementById("graph3dPrevious");
+  if (previousButton && graph3DPreviousHandler) {
+    previousButton.removeEventListener("click", graph3DPreviousHandler);
+  }
+  graph3DPreviousHandler = () => {
+    if (!graph.pagination.hasPrevious) return;
+    graph3DPage -= 1;
+    graph3DReloadHandler?.();
+  };
+  previousButton?.toggleAttribute("disabled", !graph.pagination.hasPrevious);
+  previousButton?.addEventListener("click", graph3DPreviousHandler);
+
+  const nextButton = document.getElementById("graph3dNext");
+  if (nextButton && graph3DNextHandler) {
+    nextButton.removeEventListener("click", graph3DNextHandler);
+  }
+  graph3DNextHandler = () => {
+    if (!graph.pagination.hasNext) return;
+    graph3DPage += 1;
+    graph3DReloadHandler?.();
+  };
+  nextButton?.toggleAttribute("disabled", !graph.pagination.hasNext);
+  nextButton?.addEventListener("click", graph3DNextHandler);
+
+  window.addEventListener("resize", resize);
+  resize();
+  animate();
+}
+
+startGraph3D().catch((error) => {
+  const status = document.getElementById("graph3dStatus");
+  if (status) {
+    status.textContent =
+      error instanceof Error ? error.message : "Graph 3D failed";
+  }
+  console.error(error);
+});
