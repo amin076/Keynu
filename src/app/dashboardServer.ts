@@ -99,9 +99,9 @@ function isPortInUseError(error: unknown): boolean {
   return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EADDRINUSE";
 }
 
-function readJsonFileSafe(fullPath: string): unknown {
+export function readJsonFileSafe(fullPath: string): unknown {
   try {
-    return JSON.parse(readFileSync(fullPath, "utf8"));
+    return JSON.parse(readFileSync(fullPath, "utf8").replace(/^\uFEFF/, ""));
   } catch {
     return null;
   }

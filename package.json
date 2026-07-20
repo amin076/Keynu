@@ -18,7 +18,8 @@
     "build:mission-control": "esbuild src/app/react-dashboard/main.tsx --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/app/public/mission-control.js --loader:.css=css && node --input-type=module -e \"import {copyFileSync,mkdirSync} from 'node:fs';mkdirSync('dist/app/public',{recursive:true});copyFileSync('src/app/react-dashboard/index.html','dist/app/public/index.html')\"",
     "dashboard:dev": "vite --config apps/mission-control/vite.config.ts",
     "dashboard:build": "vite build --config apps/mission-control/vite.config.ts",
-    "dashboard:preview": "vite preview --config apps/mission-control/vite.config.ts"
+    "dashboard:preview": "vite preview --config apps/mission-control/vite.config.ts",
+    "test:dashboard-bom": "npm run build && node dist/app/tests/dashboardServerBom.test.js"
   },
   "dependencies": {
     "@types/react": "^19.2.17",
