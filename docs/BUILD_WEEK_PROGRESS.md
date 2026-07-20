@@ -89,6 +89,30 @@ ProviderResponse
   -> continued AI interaction
 ```
 
+### Phase F Recovery Review - REJECTED_AS_DUPLICATE
+
+Phase F initially created an untracked `src/continuation/` subsystem. A recovery
+review found that Keynu already has an operational continuation cycle through
+BrowserAgent and the existing mission continuation foundation:
+
+```text
+ChatGPT assistant JOB
+  -> ProviderRuntime
+  -> BrowserAgent
+  -> routeKapJob() / Runtime.execute()
+  -> verified KAP REPORT
+  -> ConversationManager.sendMessage()
+  -> BrowserContinuationCoordinator
+  -> ContinuationStore / ContinuationDeliveryService
+  -> KEYNU_CONTINUATION_REQUEST
+  -> ConversationWatcher waits for the next assistant response
+```
+
+The untracked Phase F subsystem was not connected to production and introduced
+parallel state, report, policy, history, and result models. It was removed. The
+existing BrowserAgent plus `BrowserContinuationCoordinator` path remains the
+authoritative continuation architecture.
+
 ## Verification Status
 
 - TypeScript compilation passed using the local Node runtime.
@@ -109,6 +133,6 @@ node node_modules/vite/bin/vite.js build --config apps/mission-control/vite.conf
 
 ## Next Planned Phase
 
-Phase F: Provider response execution integration after Phase E review.
-
-Phase F is not implemented yet.
+Corrected Phase F follow-up: adapt future API-provider execution to the
+existing BrowserAgent/mission continuation flow through a minimal source-backed
+adapter. Do not add a second continuation state machine.
