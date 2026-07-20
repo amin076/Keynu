@@ -30,13 +30,6 @@ export class BrowserSession {
         .find((page) => page.url().startsWith(this.config.defaultUrl)) ??
       this.context.pages()[0] ??
       (await this.context.newPage());
-
-    if (this.config.dedicatedConversationUrl) {
-      await this.page.goto(this.config.dedicatedConversationUrl, {
-        waitUntil: "domcontentloaded",
-      });
-    }
-
     return this.page;
   }
 

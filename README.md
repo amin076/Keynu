@@ -1,147 +1,236 @@
 # Keynu
 
-> A mission operating system for AI agents.
+> Give AI the ability to continue real software projects—not just answer prompts.
 
-Keynu helps AI systems continue long-running missions across conversations, restore repository-backed context, execute local tools through controlled drivers, and verify completed work with concrete evidence.
+Keynu is an open-source runtime that enables AI to work on long-running software projects by restoring project context, executing verified local actions, and continuing missions across multiple conversations.
 
-## Why Keynu
+Instead of treating every chat as a new beginning, Keynu helps AI resume where it previously stopped.
 
-AI assistants are effective at isolated prompts, but complex projects frequently lose context, stop between conversations, disconnect reasoning from local execution, or claim completion without verifiable proof.
+---
 
-Keynu addresses this by placing a mission-oriented runtime between AI providers and local applications.
+# The Problem
 
-## Core Capabilities
+Today's AI models are remarkably good at reasoning and writing code.
 
-- repository-backed mission memory;
-- mission bootstrap and acknowledgement;
-- structured KAP jobs, reports, errors, and control messages;
-- controlled local execution through registered drivers;
-- provider-neutral runtime foundations;
-- automatic continuation after completed or interrupted steps;
-- verification checks and evidence certificates;
-- Mission Control visibility into runtime, mission, and graph state.
+However, real software projects rarely fit inside a single conversation.
 
-## Build Week Demo
+Developers repeatedly face the same problems:
 
-The competition demo follows one continuous mission across the AI and local runtime:
+- AI forgets previous architectural decisions.
+- Long-running work is interrupted when conversations end.
+- Local development tools are disconnected from AI reasoning.
+- Completed work is difficult to verify.
+- Large projects require repeatedly explaining the same context.
+
+As projects grow, AI spends more time rebuilding context than making progress.
+
+---
+
+# The Solution
+
+Keynu introduces a mission-oriented runtime between AI models and local development tools.
+
+Instead of remembering only a conversation, Keynu restores the active mission directly from the repository.
+
+Every completed task becomes part of the project's continuing mission rather than disappearing with the chat.
+
+Keynu combines five core ideas:
+
+- Persistent Mission Memory
+- Repository-backed Context
+- Controlled Local Execution
+- Evidence-based Verification
+- Automatic Mission Continuation
+
+Together these allow AI to work on projects that continue for days, weeks, or months.
+
+---
+
+# Why Keynu?
+
+Keynu is not another large language model.
+
+It does not replace ChatGPT or Codex.
+
+Instead, it provides the execution and continuity layer that allows existing AI models to participate in real software engineering workflows.
+
+While AI focuses on reasoning, Keynu focuses on:
+
+- remembering;
+- executing;
+- verifying;
+- continuing.
+
+---
+
+# Build Week Demo
+
+The Build Week demonstration follows one software engineering mission from beginning to end.
 
 ```text
-New Chat
-  -> Mission Bootstrap
-  -> Mission Acknowledgement
-  -> Structured KAP Job
-  -> Local Keynu Execution
-  -> Verified KAP Report
-  -> Evidence Certificate
-  -> Continuation Request
-  -> Next Distinct Mission Step
-  -> Mission Control Evidence
+Developer
+        │
+        ▼
+ ChatGPT / Codex
+        │
+        ▼
+ Mission Bootstrap
+        │
+        ▼
+ Repository Context Restored
+        │
+        ▼
+ Structured KAP Job
+        │
+        ▼
+ Local Runtime Execution
+        │
+        ▼
+ Verification
+        │
+        ▼
+ Evidence Generated
+        │
+        ▼
+ Continuation Request
+        │
+        ▼
+ Next Mission Step
 ```
 
-The central idea is simple:
+Rather than showing isolated prompts, the demo shows AI continuing one engineering mission across multiple conversations with verified local execution.
 
-> AI agents should not merely answer prompts. They should continue missions safely, remember project state, use real tools, and prove what they accomplished.
+---
 
-## Architecture
+# Core Capabilities
+
+- Persistent repository-backed mission memory
+- Mission bootstrap and acknowledgement
+- Structured KAP protocol
+- Provider-neutral runtime
+- Driver-based local execution
+- BrowserAgent
+- Automatic continuation engine
+- Verification and evidence generation
+- Mission Control dashboard
+- Mission graph visualization
+
+---
+
+# Architecture
 
 ```text
-ChatGPT / Codex / Human / Dashboard
-                 |
-                 v
-          Provider Runtime
-                 |
-                 v
-      Mission + Memory Runtime
-                 |
-                 v
-          KAP Command Layer
-                 |
-                 v
-      Drivers and Local Tools
-                 |
-                 v
- Verification + Evidence Store
-                 |
-                 v
-        Mission Control UI
+                 Human
+                   │
+                   ▼
+        ChatGPT / Codex / AI
+                   │
+                   ▼
+          Mission Bootstrap
+                   │
+                   ▼
+          Keynu Runtime Core
+      ┌────────────┼────────────┐
+      ▼            ▼            ▼
+ Mission      KAP Runtime    Memory
+ Control                     Engine
+      │            │            │
+      └────────────┼────────────┘
+                   ▼
+         Driver Capability Layer
+                   │
+      ┌────────────┼────────────┐
+      ▼            ▼            ▼
+ Filesystem    BrowserAgent   Applications
+                   │
+                   ▼
+         Verification Engine
+                   │
+                   ▼
+         Evidence & Reports
 ```
 
-## Important Components
+---
 
-- `MissionRegistry` and `ActiveMissionResolver`;
-- `MissionManager` and `MissionStateMachine`;
-- `BootstrapBuilder`;
-- `BrowserContinuationCoordinator`;
-- `ContinuationStore` and `ContinuationDeliveryService`;
-- `ProviderRuntime`;
-- KAP extraction, validation, interpretation, and routing;
-- driver and capability registries;
-- verification policies and certificates;
-- BrowserAgent;
-- Mission Control Dashboard.
+# Why Codex?
 
-## Run Locally
+Codex is excellent at reasoning about code.
 
-### Requirements
+Keynu extends that capability by allowing Codex to:
 
-- Node.js 20 or later;
-- npm;
-- Google Chrome for BrowserAgent operation.
+- restore project context;
+- execute verified local tasks;
+- continue long-running missions;
+- coordinate tools through structured KAP messages;
+- produce evidence-backed completion reports.
 
-### Install and Build
+The two systems complement each other rather than compete.
 
-```powershell
+---
+
+# Run Keynu
+
+## Requirements
+
+- Node.js 20+
+- npm
+- Google Chrome
+
+Install:
+
+```bash
 npm install
 npm run build
 ```
 
-### Run Verification Tests
+Start BrowserAgent:
 
-```powershell
-npm run test:verification
-```
-
-### Connect ChatGPT
-
-```powershell
-npm run connect:chatgpt
-```
-
-Follow the terminal instructions, open the requested ChatGPT conversation in the dedicated Keynu Chrome window, and leave the connector terminal running.
-
-### Start BrowserAgent Directly
-
-```powershell
+```bash
 npm run browser-agent
 ```
 
-### Check Mission Control
+Run verification:
 
-```powershell
-npm run dashboard:health
+```bash
+npm run test:verification
+```
+
+Mission Control:
+
+```bash
 npm run dashboard:status
 ```
 
-## Verification Philosophy
+---
 
-Keynu does not treat a successful process exit as sufficient proof of completion. Runtime results can be checked against execution evidence, repository state, read-back operations, and verification policies. Successful verified operations may produce evidence certificates.
+# Current Status
 
-## OpenAI Build Week
+Keynu currently includes:
 
-The Build Week milestone is to deliver a focused, competition-ready demonstration of persistent mission continuity, safe local action, and evidence-backed completion.
+- Mission Runtime
+- Repository Memory
+- BrowserAgent
+- Provider Runtime
+- KAP Protocol
+- Driver Framework
+- Continuation Engine
+- Verification Engine
+- Mission Control Dashboard
 
-Development priorities before submission:
+These components are actively used to develop real software projects, including Keynu itself and Esbiko.
 
-1. confirm the exact Codex execution path and meaningful Codex contribution;
-2. validate the complete demo sequence;
-3. ensure Mission Control clearly presents mission and evidence state;
-4. record the demo video;
-5. complete final build, test, and submission checks.
+---
 
-## Project Status
+# Vision
 
-The repository currently contains working mission, continuation, BrowserAgent, provider, KAP, driver, verification, and Mission Control foundations. Build and verification tests have passed during the Build Week preparation process.
+Today's AI can generate code.
 
-## License
+Tomorrow's AI should be able to build complete software systems over weeks or months without losing its mission.
 
-License information will be added before public submission.
+Keynu is an open-source step toward that future.
+
+---
+
+# License
+
+License information will be added before public release.

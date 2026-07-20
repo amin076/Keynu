@@ -19,7 +19,8 @@
     "dashboard:dev": "vite --config apps/mission-control/vite.config.ts",
     "dashboard:build": "vite build --config apps/mission-control/vite.config.ts",
     "dashboard:preview": "vite preview --config apps/mission-control/vite.config.ts",
-    "test:dashboard-bom": "npm run build && node dist/app/tests/dashboardServerBom.test.js"
+    "test:dashboard-bom": "npm run build && node dist/app/tests/dashboardServerBom.test.js",
+    "test:browser-reminder": "npm run build && node dist/browser/tests/BrowserAgentReminderIntegration.test.js"
   },
   "dependencies": {
     "@types/react": "^19.2.17",
