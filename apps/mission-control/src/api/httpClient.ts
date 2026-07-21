@@ -61,7 +61,7 @@ export class ApiClient {
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? '');
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 15_000;
-    this.fetchImplementation = options.fetchImplementation ?? fetch;
+    this.fetchImplementation = options.fetchImplementation ?? globalThis.fetch.bind(globalThis);
   }
 
   get<TResponse>(endpoint: string, options: ApiRequestOptions = {}): Promise<TResponse> {

@@ -7,6 +7,7 @@ import { BrowserDriver } from "./BrowserDriver.js";
 import { VerificationReportIntegration } from "../verification/VerificationReportIntegration.js";
 import { MissionManager } from "../mission/MissionManager.js";
 import { BrowserContinuationCoordinator } from "../mission/BrowserContinuationCoordinator.js";
+import { BrowserContinuationReminderService } from "../mission/BrowserContinuationReminderService.js";
 import type { MissionAckPayload } from "../mission/MissionTypes.js";
 import { SessionStore, type KeynuSessionPatch } from "../session/index.js";
 import { RuntimeGraphTracer } from "../graph/RuntimeGraphTracer.js";
@@ -22,8 +23,7 @@ export function createMissionAcknowledgementSessionPatch(
     missionProjectId: acknowledgement.payload.projectId,
     missionId: acknowledgement.payload.missionId,
     missionBootstrapId: acknowledgement.payload.acknowledgedBootstrapId,
-    missionMemoryRevision:
-      acknowledgement.payload.acknowledgedMemoryRevision,
+    missionMemoryRevision: acknowledgement.payload.acknowledgedMemoryRevision,
     missionAcknowledgedAt: acknowledgedAt,
     missionRestorationStaleReason: undefined,
     runtimeState: "idle",
@@ -35,14 +35,24 @@ export class BrowserAgent {
   private readonly processedMissionAckIds = new Set<string>();
   private readonly verification = new VerificationReportIntegration();
   private readonly missionManager = new MissionManager();
-  private readonly continuationCoordinator = new BrowserContinuationCoordinator();
   private readonly graphTracer = new RuntimeGraphTracer();
   private readonly providerRuntime = new ProviderRuntime();
+  private readonly continuationCoordinator = new BrowserContinuationCoordinator();
+  private readonly continuationReminderService: BrowserContinuationReminderService;
 
   constructor(
     private readonly browser: BrowserDriver,
     private readonly runtime: Runtime,
-  ) {}
+  ) {
+    this.continuationReminderService = new BrowserContinuationReminderService(
+      async (message) => {
+        console.log("[ReminderDebug] reminder callback invoked");
+        console.log("[ReminderDebug] sending reminder message");
+        await this.browser.getConversation().sendMessage(message);
+        console.log("[ReminderDebug] reminder message sent");
+      },
+    );
+  }
 
   async start(): Promise<void> {
     const conversation = this.browser.getConversation();
@@ -53,6 +63,16 @@ export class BrowserAgent {
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
 
+      /*
+       * Any assistant message proves that the assistant is alive.
+       *
+       * Cancellation intentionally happens before KAP extraction,
+       * validation, duplicate detection, acknowledgement handling, or any
+       * other message processing.
+       */
+      console.log("[ReminderDebug] cancel() called");
+      this.continuationReminderService.cancel();
+
       console.log("[agent] Assistant message received.");
 
       const providerResponse: ProviderResponse = {
@@ -62,12 +82,14 @@ export class BrowserAgent {
         content: messageText,
         createdAt: new Date().toISOString(),
       };
+
       const runtimeResult = await this.providerRuntime.execute(
         providerResponse,
         {
           source: "browser-agent",
         },
       );
+
       const kap = runtimeResult.items[0]?.envelope as any;
 
       if (kap?.type === "JOB") {
@@ -76,21 +98,13 @@ export class BrowserAgent {
 
       if (!kap) {
         console.error("[agent] KAP extraction or validation failed.");
-        await watcher.markFailed(messageText);
 
-        const missionStatus=this.missionManager.getStatus();
-        if(missionStatus){
-          await this.continuationCoordinator.continueAfterReport({
-            missionId:missionStatus.missionId,
-            missionTitle:missionStatus.title,
-            jobId:`non-kap-${Date.now()}`,
-            reportStatus:"FAILED",
-            nextAction:"Recover after non-KAP assistant response",
-            consecutiveFailureCount:1
-          },async (message) => {
-            await conversation.sendMessage(message);
-          });
-        }
+        // Recover after non-KAP assistant response.
+        const message =
+          "Recover after non-KAP assistant response: resend the previous response as exactly one valid ```kap``` envelope. Do not include prose outside the KAP block.";
+
+        await conversation.sendMessage(message);
+        await watcher.markFailed(messageText);
         continue;
       }
 
@@ -112,9 +126,7 @@ export class BrowserAgent {
           );
 
           new SessionStore().patch(
-            createMissionAcknowledgementSessionPatch(
-              kap as MissionAckPayload,
-            ),
+            createMissionAcknowledgementSessionPatch(kap as MissionAckPayload),
           );
 
           console.log(
@@ -122,10 +134,14 @@ export class BrowserAgent {
           );
 
           await watcher.markReported(messageText);
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
           console.error(
-            `[agent] Mission acknowledgement failed: ${error.message ?? String(error)}`,
+            `[agent] Mission acknowledgement failed: ${errorMessage}`,
           );
+
           await watcher.markFailed(messageText);
         }
 
@@ -163,12 +179,18 @@ export class BrowserAgent {
           const routedPayload = routedReport?.payload ?? {};
           const rawResult = routedPayload.result ?? {};
           const now = new Date().toISOString();
+
           const startedAt =
             typeof rawResult.startedAt === "string" ? rawResult.startedAt : now;
+
           const finishedAt =
-            typeof rawResult.finishedAt === "string" ? rawResult.finishedAt : now;
+            typeof rawResult.finishedAt === "string"
+              ? rawResult.finishedAt
+              : now;
+
           const status =
-            rawResult.status === "COMPLETED" || routedPayload.status === "COMPLETED"
+            rawResult.status === "COMPLETED" ||
+            routedPayload.status === "COMPLETED"
               ? "COMPLETED"
               : "FAILED";
 
@@ -203,7 +225,9 @@ export class BrowserAgent {
 
           this.graphTracer.traceCompleted(traceContext, rawResult);
 
-          const verified = this.verification.createVerifiedReport(executionResult);
+          const verified =
+            this.verification.createVerifiedReport(executionResult);
+
           const certifiedReport = {
             ...routedReport,
             payload: {
@@ -217,53 +241,49 @@ export class BrowserAgent {
             },
           };
 
-          await conversation.sendMessage(serializeBrowserReport(certifiedReport));
+          await conversation.sendMessage(
+            serializeBrowserReport(certifiedReport),
+          );
+
+          const missionId = kap.metadata?.missionId;
+
+          if (missionId) {
+            const continuationResult =
+              await this.continuationCoordinator.continueAfterReport(
+                {
+                  missionId,
+                  missionTitle: kap.metadata?.missionTitle,
+                  jobId: kap.id,
+                  reportStatus: status,
+                  nextAction: rawResult.nextAction,
+                  autonomousStepCount: rawResult.autonomousStepCount,
+                  consecutiveFailureCount: rawResult.consecutiveFailureCount,
+                  maxAutonomousSteps: rawResult.maxAutonomousSteps,
+                },
+                async (message) => {
+                  await conversation.sendMessage(message);
+                },
+              );
+
+            console.log(
+              "[agent] Continuation request result:",
+              continuationResult,
+            );
+          } else {
+            console.log(
+              "[agent] Continuation request result:",
+              "SKIPPED_NO_MISSION_ID",
+            );
+          }
+
+          /*
+           * Keep the delayed reminder chain as a fallback when the AI does
+           * not answer the continuation request.
+           */
+          this.continuationReminderService.start();
 
           if (status === "COMPLETED") {
             this.missionManager.recordJob(kap.id);
-
-            try {
-              const missionStatus = this.missionManager.getStatus();
-              const missionId =
-                kap.metadata?.missionId ||
-                missionStatus?.missionId ||
-                'keynu-active-mission';
-
-              const continuationResult =
-                await this.continuationCoordinator.continueAfterReport(
-                  {
-                    missionId,
-                    missionTitle: missionStatus?.title,
-                    jobId: kap.id,
-                    reportStatus:
-                      certifiedReport?.payload?.status ||
-                      routedPayload?.status ||
-                      rawResult?.status ||
-                      'UNKNOWN',
-                    nextAction:
-                      missionStatus?.openTasks?.[0] ||
-                      'generate_next_safe_verifiable_kap_job',
-                    autonomousStepCount: 0,
-                    maxAutonomousSteps: 12,
-                  },
-                  async (message) => {
-                    await conversation.sendMessage(message);
-                  },
-                );
-
-              console.log(
-                '[agent] Continuation request result:',
-                continuationResult.deliveryStatus,
-                continuationResult.requestId,
-);
-            } catch (continuationError) {
-              console.error(
-                '[agent] Continuation coordination failed:',
-                continuationError instanceof Error
-                  ? continuationError.message
-                  : String(continuationError),
-);
-            }
             await watcher.markReported(messageText);
           } else {
             await watcher.markFailed(messageText);
@@ -274,6 +294,7 @@ export class BrowserAgent {
 
         const task = kapJobToTask(kap);
         const result = await this.runtime.execute(task);
+
         this.graphTracer.traceCompleted(traceContext, {
           status: result.status,
           commands: result.steps.map((step) => ({
@@ -309,6 +330,12 @@ export class BrowserAgent {
               "\n```",
           );
 
+          /*
+           * The runtime path also delivered a REPORT, so it uses the same
+           * temporary BrowserAgent reminder behaviour.
+           */
+          this.continuationReminderService.start();
+
           this.missionManager.recordJob(kap.id);
           await watcher.markReported(messageText);
         } else {
@@ -319,13 +346,17 @@ export class BrowserAgent {
               result,
             ),
           );
+
           await watcher.markFailed(messageText);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
         this.graphTracer.traceFailed(traceContext, error);
 
         await conversation.sendMessage(
-          createKapErrorReport(kap.id, error.message ?? String(error), {
+          createKapErrorReport(kap.id, errorMessage, {
             taskId: kap.id,
             status: "FAILED",
             startedAt: new Date().toISOString(),
@@ -333,14 +364,14 @@ export class BrowserAgent {
             durationMs: 0,
             stepsRun: 0,
             steps: [],
-            error: error.message ?? String(error),
+            error: errorMessage,
           } as any),
         );
+
         await watcher.markFailed(messageText);
       }
     }
   }
-
 
   async seedWatcherBaseline(): Promise<void> {
     await this.browser.getWatcher().seedBaseline();
