@@ -14,25 +14,30 @@ export class BrowserSession {
   constructor(private readonly config: BrowserConfig) {}
 
   async start(): Promise<Page> {
-    this.browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
+    const cdpUrl = process.env.KEYNU_CDP_URL?.trim() || "http://127.0.0.1:9222";
+    this.browser = await chromium.connectOverCDP(cdpUrl);
 
     this.context = this.browser.contexts()[0];
 
     if (!this.context) {
       throw new Error(
-        "No Chrome context found. Start Chrome with --remote-debugging-port=9222.",
+        `No Chrome context found at ${cdpUrl}. Start the browser from the Keynu dashboard or provide KEYNU_CDP_URL.`,
       );
     }
 
+    const dedicatedConversationUrl = this.config.dedicatedConversationUrl?.trim();
     this.page =
+      (dedicatedConversationUrl
+        ? this.context.pages().find((page) => page.url() === dedicatedConversationUrl)
+        : undefined) ??
       this.context
         .pages()
         .find((page) => page.url().startsWith(this.config.defaultUrl)) ??
       this.context.pages()[0] ??
       (await this.context.newPage());
 
-    if (this.config.dedicatedConversationUrl) {
-      await this.page.goto(this.config.dedicatedConversationUrl, {
+    if (dedicatedConversationUrl && this.page.url() !== dedicatedConversationUrl) {
+      await this.page.goto(dedicatedConversationUrl, {
         waitUntil: "domcontentloaded",
       });
     }
