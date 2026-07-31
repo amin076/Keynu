@@ -151,6 +151,7 @@ export class DashboardBrowserController {
         ...process.env,
         KEYNU_CONVERSATION_URL: selected.url,
         KEYNU_CDP_URL: this.cdpUrl,
+        KEYNU_DASHBOARD_MANAGED: "1",
       },
       stdio: "inherit",
       windowsHide: false,
