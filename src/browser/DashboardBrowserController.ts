@@ -17,6 +17,7 @@ export type DashboardBrowserStatus = {
   profilePath: string;
   selectedPageUrl: string | null;
   selectedPageTitle: string | null;
+  selectedPageId: string | null;
   agentPid: number | null;
 };
 
@@ -35,6 +36,7 @@ export class DashboardBrowserController {
   private readonly profilePath: string;
   private browserProcess: ChildProcess | null = null;
   private agentProcess: ChildProcess | null = null;
+  private selectedPageId: string | null = null;
   private selectedPageUrl: string | null = null;
   private selectedPageTitle: string | null = null;
 
@@ -54,6 +56,7 @@ export class DashboardBrowserController {
       cdpUrl: this.cdpUrl,
       remoteDebuggingPort: this.port,
       profilePath: this.profilePath,
+      selectedPageId: this.selectedPageId,
       selectedPageUrl: this.selectedPageUrl,
       selectedPageTitle: this.selectedPageTitle,
       agentPid: this.agentProcess?.pid ?? null,
@@ -112,15 +115,23 @@ export class DashboardBrowserController {
       .filter((target) => Boolean(target.url));
   }
 
-  async connectPage(url: string): Promise<DashboardBrowserStatus> {
-    const normalizedUrl = url.trim();
-    if (!normalizedUrl) throw new Error("A browser page URL is required.");
+  async connectPage(selection: { id?: string; url?: string }): Promise<DashboardBrowserStatus> {
+    const requestedId = selection.id?.trim() ?? "";
+    const requestedUrl = selection.url?.trim() ?? "";
+    if (!requestedId && !requestedUrl) {
+      throw new Error("A browser page selection is required.");
+    }
 
     await this.startBrowser();
     const pages = await this.listPages();
-    const selected = pages.find((page) => page.url === normalizedUrl);
+    const selected =
+      (requestedId ? pages.find((page) => page.id === requestedId) : undefined) ??
+      (requestedUrl ? pages.find((page) => page.url === requestedUrl) : undefined);
+
     if (!selected) {
-      throw new Error("The selected browser page is no longer open. Refresh the page list and choose again.");
+      throw new Error(
+        "The selected browser page is no longer open. Refresh the page list and choose the ChatGPT page again.",
+      );
     }
 
     this.stopAgent();
@@ -130,6 +141,7 @@ export class DashboardBrowserController {
       throw new Error("Browser Agent build output is missing. Run npm run build before connecting.");
     }
 
+    this.selectedPageId = selected.id;
     this.selectedPageUrl = selected.url;
     this.selectedPageTitle = selected.title;
 
@@ -153,6 +165,7 @@ export class DashboardBrowserController {
 
   async disconnectPage(): Promise<DashboardBrowserStatus> {
     this.stopAgent();
+    this.selectedPageId = null;
     this.selectedPageUrl = null;
     this.selectedPageTitle = null;
     return this.getStatus();
