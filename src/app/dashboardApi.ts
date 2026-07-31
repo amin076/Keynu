@@ -151,8 +151,9 @@ export async function handleDashboardApi(
   if (request.method === "POST" && url.pathname === "/api/browser/connect") {
     try {
       const body = await readJsonBody(request);
-      const pageUrl = typeof body.url === "string" ? body.url : "";
-      const status = await dashboardBrowserController.connectPage(pageUrl);
+      const pageId = typeof body.id === "string" ? body.id : undefined;
+      const pageUrl = typeof body.url === "string" ? body.url : undefined;
+      const status = await dashboardBrowserController.connectPage({ id: pageId, url: pageUrl });
       sendJson(response, 200, { ok: true, ...status, time: new Date().toISOString() });
     } catch (error) {
       sendJson(response, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
