@@ -19,6 +19,7 @@ export class BrowserAgent {
   private readonly missionManager = new MissionManager();
   private readonly continuationCoordinator = new BrowserContinuationCoordinator();
   private readonly graphTracer = new RuntimeGraphTracer();
+  private readonly dashboardManaged = process.env.KEYNU_DASHBOARD_MANAGED === "1";
 
   constructor(
     private readonly browser: BrowserDriver,
@@ -30,6 +31,9 @@ export class BrowserAgent {
     const watcher = this.browser.getWatcher();
 
     console.log("[agent] BrowserAgent loop started.");
+    if (this.dashboardManaged) {
+      console.log("[agent] Dashboard-managed mode: mission registry and autonomous continuation disabled.");
+    }
 
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
@@ -46,18 +50,33 @@ export class BrowserAgent {
         console.error("[agent] KAP extraction or validation failed.");
         await watcher.markFailed(messageText);
 
-        const missionStatus=this.missionManager.getStatus();
-        if(missionStatus){
-          await this.continuationCoordinator.continueAfterReport({
-            missionId:missionStatus.missionId,
-            missionTitle:missionStatus.title,
-            jobId:`non-kap-${Date.now()}`,
-            reportStatus:"FAILED",
-            nextAction:"Recover after non-KAP assistant response",
-            consecutiveFailureCount:1
-          },async (message) => {
-            await conversation.sendMessage(message);
-          });
+        if (this.dashboardManaged) {
+          console.log("[agent] Dashboard-managed mode: ignoring non-KAP assistant message.");
+          continue;
+        }
+
+        try {
+          const missionStatus = this.missionManager.getStatus();
+          if (missionStatus) {
+            await this.continuationCoordinator.continueAfterReport(
+              {
+                missionId: missionStatus.missionId,
+                missionTitle: missionStatus.title,
+                jobId: `non-kap-${Date.now()}`,
+                reportStatus: "FAILED",
+                nextAction: "Recover after non-KAP assistant response",
+                consecutiveFailureCount: 1,
+              },
+              async (message) => {
+                await conversation.sendMessage(message);
+              },
+            );
+          }
+        } catch (missionError) {
+          console.error(
+            "[agent] Non-KAP mission recovery failed:",
+            missionError instanceof Error ? missionError.message : String(missionError),
+          );
         }
         continue;
       }
@@ -67,6 +86,12 @@ export class BrowserAgent {
       );
 
       if (kap.type === "MISSION_ACK") {
+        if (this.dashboardManaged) {
+          console.log("[agent] Dashboard-managed mode: ignoring mission acknowledgement.");
+          await watcher.markReported(messageText);
+          continue;
+        }
+
         if (this.processedMissionAckIds.has(kap.id)) {
           await watcher.markReported(messageText);
           continue;
@@ -188,49 +213,51 @@ export class BrowserAgent {
           await conversation.sendMessage(serializeBrowserReport(certifiedReport));
 
           if (status === "COMPLETED") {
-            this.missionManager.recordJob(kap.id);
+            if (!this.dashboardManaged) {
+              this.missionManager.recordJob(kap.id);
 
-            try {
-              const missionStatus = this.missionManager.getStatus();
-              const missionId =
-                kap.metadata?.missionId ||
-                missionStatus?.missionId ||
-                'keynu-active-mission';
+              try {
+                const missionStatus = this.missionManager.getStatus();
+                const missionId =
+                  kap.metadata?.missionId ||
+                  missionStatus?.missionId ||
+                  "keynu-active-mission";
 
-              const continuationResult =
-                await this.continuationCoordinator.continueAfterReport(
-                  {
-                    missionId,
-                    missionTitle: missionStatus?.title,
-                    jobId: kap.id,
-                    reportStatus:
-                      certifiedReport?.payload?.status ||
-                      routedPayload?.status ||
-                      rawResult?.status ||
-                      'UNKNOWN',
-                    nextAction:
-                      missionStatus?.openTasks?.[0] ||
-                      'generate_next_safe_verifiable_kap_job',
-                    autonomousStepCount: 0,
-                    maxAutonomousSteps: 12,
-                  },
-                  async (message) => {
-                    await conversation.sendMessage(message);
-                  },
+                const continuationResult =
+                  await this.continuationCoordinator.continueAfterReport(
+                    {
+                      missionId,
+                      missionTitle: missionStatus?.title,
+                      jobId: kap.id,
+                      reportStatus:
+                        certifiedReport?.payload?.status ||
+                        routedPayload?.status ||
+                        rawResult?.status ||
+                        "UNKNOWN",
+                      nextAction:
+                        missionStatus?.openTasks?.[0] ||
+                        "generate_next_safe_verifiable_kap_job",
+                      autonomousStepCount: 0,
+                      maxAutonomousSteps: 12,
+                    },
+                    async (message) => {
+                      await conversation.sendMessage(message);
+                    },
+                  );
+
+                console.log(
+                  "[agent] Continuation request result:",
+                  continuationResult.deliveryStatus,
+                  continuationResult.requestId,
                 );
-
-              console.log(
-                '[agent] Continuation request result:',
-                continuationResult.deliveryStatus,
-                continuationResult.requestId,
-);
-            } catch (continuationError) {
-              console.error(
-                '[agent] Continuation coordination failed:',
-                continuationError instanceof Error
-                  ? continuationError.message
-                  : String(continuationError),
-);
+              } catch (continuationError) {
+                console.error(
+                  "[agent] Continuation coordination failed:",
+                  continuationError instanceof Error
+                    ? continuationError.message
+                    : String(continuationError),
+                );
+              }
             }
             await watcher.markReported(messageText);
           } else {
@@ -277,7 +304,9 @@ export class BrowserAgent {
               "\n```",
           );
 
-          this.missionManager.recordJob(kap.id);
+          if (!this.dashboardManaged) {
+            this.missionManager.recordJob(kap.id);
+          }
           await watcher.markReported(messageText);
         } else {
           await conversation.sendMessage(
@@ -308,7 +337,6 @@ export class BrowserAgent {
       }
     }
   }
-
 
   async seedWatcherBaseline(): Promise<void> {
     await this.browser.getWatcher().seedBaseline();
