@@ -34,11 +34,12 @@ Instead of remembering only a conversation, Keynu restores the active mission di
 
 Every completed task becomes part of the project's continuing mission rather than disappearing with the chat.
 
-Keynu combines five core ideas:
+Keynu combines six core ideas:
 
 - Persistent Mission Memory
 - Repository-backed Context
 - Controlled Local Execution
+- Shared Engineering Runtime
 - Evidence-based Verification
 - Automatic Mission Continuation
 
@@ -108,7 +109,8 @@ Rather than showing isolated prompts, the demo shows AI continuing one engineeri
 - Mission bootstrap and acknowledgement
 - Structured KAP protocol
 - Provider-neutral runtime
-- Driver-based local execution
+- Shared Engineering Runtime for project-scoped IO, commands, scripts, Git, build/test and verification
+- Driver-based domain execution
 - BrowserAgent
 - Automatic continuation engine
 - Verification and evidence generation
@@ -120,35 +122,32 @@ Rather than showing isolated prompts, the demo shows AI continuing one engineeri
 # Architecture
 
 ```text
-                 Human
-                   │
-                   ▼
-        ChatGPT / Codex / AI
-                   │
-                   ▼
-          Mission Bootstrap
-                   │
-                   ▼
-          Keynu Runtime Core
-      ┌────────────┼────────────┐
-      ▼            ▼            ▼
- Mission      KAP Runtime    Memory
- Control                     Engine
-      │            │            │
-      └────────────┼────────────┘
-                   ▼
-         Driver Capability Layer
-                   │
-      ┌────────────┼────────────┐
-      ▼            ▼            ▼
- Filesystem    BrowserAgent   Applications
-                   │
-                   ▼
-         Verification Engine
-                   │
-                   ▼
-         Evidence & Reports
+                 Human / AI
+                    │
+                    ▼
+          Mission + KAP Runtime
+                    │
+       ┌────────────┼────────────┐
+       ▼            ▼            ▼
+    Memory      Continuation   Verification
+       │            │            │
+       └────────────┼────────────┘
+                    ▼
+            Engineering Runtime
+        filesystem / process / scripts
+          Git / build / test / verify
+                    │
+                    ▼
+              Domain Drivers
+       Melakat / Dehlero / Blender / ...
+                    │
+                    ▼
+             Project Repositories
 ```
+
+Generic software-engineering work belongs in the Engineering Runtime. Domain drivers should contain only domain-specific semantics and should not reimplement filesystem, shell, Git, build, or test infrastructure.
+
+See `docs/ARCHITECTURE/ENGINEERING_RUNTIME_V1.md` for the current contract.
 
 ---
 
@@ -189,10 +188,10 @@ Start BrowserAgent:
 npm run browser-agent
 ```
 
-Run verification:
+Run the comprehensive validation suite:
 
 ```bash
-npm run test:verification
+npm test
 ```
 
 Mission Control:
@@ -212,12 +211,14 @@ Keynu currently includes:
 - BrowserAgent
 - Provider Runtime
 - KAP Protocol
-- Driver Framework
+- Engineering Runtime v1
+- Domain Driver Framework
 - Continuation Engine
 - Verification Engine
 - Mission Control Dashboard
+- GitHub CI validation
 
-These components are actively used to develop real software projects, including Keynu itself and Esbiko.
+The runtime is being hardened so it can continuously support software development and research missions for projects such as Melakat without duplicating generic engineering tools in every project driver.
 
 ---
 
