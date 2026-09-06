@@ -30,7 +30,24 @@ jobs:
         run: npm ci
 
       - name: Build TypeScript and dashboard
-        run: npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee keynu-build.log
 
       - name: Run all compiled tests
-        run: node scripts/run-all-tests.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/run-all-tests.mjs 2>&1 | tee keynu-tests.log
+
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keynu-validation-diagnostics-${{ github.run_id }}
+          path: |
+            keynu-build.log
+            keynu-tests.log
+          if-no-files-found: ignore
+          retention-days: 7
