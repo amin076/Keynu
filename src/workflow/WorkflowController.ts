@@ -5,6 +5,13 @@ import { WorkflowContinuationService } from './WorkflowContinuationService.js';
 import { WorkflowJobGenerator } from './WorkflowJobGenerator.js';
 import { RuntimeEvents } from '../runtime/RuntimeEvents.js';
 
+/**
+ * @deprecated Legacy workflow compatibility only.
+ *
+ * This controller installs a REPORT_CREATED continuation listener. It must not
+ * be composed into the active BrowserAgent runtime, where
+ * BrowserContinuationCoordinator is the single continuation authority.
+ */
 export class WorkflowController {
   private readonly engine: WorkflowEngine;
   private readonly continuation: WorkflowContinuationService;
