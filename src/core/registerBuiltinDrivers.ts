@@ -3,6 +3,7 @@ import { DriverManager } from "./DriverManager.js";
 import { BlenderDriver } from "../drivers/blender/BlenderDriver.js";
 import { DehleroDriver } from "../drivers/dehlero/DehleroDriver.js";
 import { FileSystemDriver } from "../drivers/filesystem/FileSystemDriver.js";
+import { MelakatDriver } from "../drivers/melakat/MelakatDriver.js";
 import { EngineeringDriver } from "../engineering/EngineeringDriver.js";
 
 export async function registerBuiltinDrivers(
@@ -14,6 +15,7 @@ export async function registerBuiltinDrivers(
   // Engineering Runtime instead of duplicating filesystem/shell/Git logic.
   manager.register(new FileSystemDriver());
   manager.register(new EngineeringDriver());
+  manager.register(new MelakatDriver());
   manager.register(new DehleroDriver());
   manager.register(new BlenderDriver());
 
@@ -64,6 +66,24 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
     capabilities.register({
       name,
       driver: "engineering",
+      action,
+      description,
+    });
+  }
+
+  const melakatCapabilities = [
+    ["melakat.status", "status", "Inspect the configured Melakat project and experiment interface."],
+    ["melakat.validateExperiment", "validateExperiment", "Validate a Melakat experiment specification through the repository CLI."],
+    ["melakat.runExperiment", "runExperiment", "Run a controlled Melakat experiment campaign and require passing validation evidence."],
+    ["melakat.readCampaign", "readCampaign", "Read the canonical Melakat campaign artifact."],
+    ["melakat.readValidation", "readValidation", "Read and evaluate the canonical Melakat validation artifact."],
+    ["melakat.compareConditions", "compareConditions", "Read baseline, condition, and comparison evidence from Melakat summary artifacts."],
+  ] as const;
+
+  for (const [name, action, description] of melakatCapabilities) {
+    capabilities.register({
+      name,
+      driver: "melakat",
       action,
       description,
     });
