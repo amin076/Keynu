@@ -1,0 +1,126 @@
+name: NPM dependency security audit
+
+on:
+  push:
+    branches:
+      - "audit/npm-dependency-security-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Validate lockfile install
+        run: npm ci --ignore-scripts
+
+      - name: Audit all dependencies
+        id: audit_all
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > npm-audit-all.json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Audit production dependencies
+        id: audit_prod
+        shell: bash
+        run: |
+          set +e
+          npm audit --omit=dev --json > npm-audit-production.json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Summarize audit
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          function readReport(path) {
+            const raw = fs.readFileSync(path, 'utf8');
+            const report = JSON.parse(raw);
+            if (report.error) {
+              throw new Error(`${path}: npm audit error: ${JSON.stringify(report.error)}`);
+            }
+            return report;
+          }
+
+          function counts(report) {
+            const value = report.metadata?.vulnerabilities ?? {};
+            return {
+              info: Number(value.info ?? 0),
+              low: Number(value.low ?? 0),
+              moderate: Number(value.moderate ?? 0),
+              high: Number(value.high ?? 0),
+              critical: Number(value.critical ?? 0),
+              total: Number(value.total ?? 0),
+            };
+          }
+
+          const all = readReport('npm-audit-all.json');
+          const production = readReport('npm-audit-production.json');
+          const allCounts = counts(all);
+          const productionCounts = counts(production);
+
+          const summary = [
+            '# npm dependency security audit',
+            '',
+            '| Scope | Info | Low | Moderate | High | Critical | Total |',
+            '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+            `| All dependencies | ${allCounts.info} | ${allCounts.low} | ${allCounts.moderate} | ${allCounts.high} | ${allCounts.critical} | ${allCounts.total} |`,
+            `| Production only | ${productionCounts.info} | ${productionCounts.low} | ${productionCounts.moderate} | ${productionCounts.high} | ${productionCounts.critical} | ${productionCounts.total} |`,
+            '',
+            `All-dependency npm audit exit code: ${{ steps.audit_all.outputs.exit_code }}`,
+            `Production npm audit exit code: ${{ steps.audit_prod.outputs.exit_code }}`,
+            '',
+          ].join('\n');
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          fs.writeFileSync(
+            'npm-audit-summary.json',
+            JSON.stringify({ all: allCounts, production: productionCounts }, null, 2) + '\n',
+          );
+          console.log(summary);
+          NODE
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-security-audit-${{ github.run_id }}
+          path: |
+            npm-audit-all.json
+            npm-audit-production.json
+            npm-audit-summary.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce no high or critical vulnerabilities
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const summary = JSON.parse(fs.readFileSync('npm-audit-summary.json', 'utf8'));
+          const severe = summary.all.high + summary.all.critical;
+          if (severe > 0) {
+            console.error(`Security gate failed: ${summary.all.high} high and ${summary.all.critical} critical vulnerabilities.`);
+            process.exit(1);
+          }
+          console.log('Security gate passed: no high or critical npm vulnerabilities.');
+          NODE
