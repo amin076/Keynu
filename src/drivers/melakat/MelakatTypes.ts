@@ -10,7 +10,10 @@ export type MelakatAction =
   | "runExperiment"
   | "readCampaign"
   | "readValidation"
-  | "compareConditions";
+  | "compareConditions"
+  | "evidenceSummary"
+  | "findExtinctions"
+  | "findAnomalies";
 
 export type MelakatPayload = {
   projectRoot?: string;
@@ -30,16 +33,27 @@ export type MelakatEngineeringRuntime = {
   ): Promise<EngineeringOperationResult>;
 };
 
+export type MelakatCampaignArtifact = Record<string, unknown> & {
+  experiment?: unknown;
+  runs?: unknown;
+  validation?: unknown;
+};
+
 export type MelakatValidationArtifact = Record<string, unknown> & {
   passed?: boolean;
   failure_count?: number;
   failures?: unknown[];
+  expected_runs?: number;
+  completed_runs?: number;
   energy_tolerance?: number;
   resource_tolerance?: number;
   reproducibility?: Record<string, unknown>;
 };
 
 export type MelakatSummaryArtifact = Record<string, unknown> & {
+  experiment?: unknown;
+  run_count?: unknown;
+  condition_count?: unknown;
   baseline_condition?: unknown;
   conditions?: unknown;
   comparisons?: unknown;

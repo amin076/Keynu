@@ -5,6 +5,7 @@ import type { EngineeringOperationResult } from "../../engineering/EngineeringTy
 import { MissionRegistry } from "../../mission/MissionRegistry.js";
 import type {
   MelakatAction,
+  MelakatCampaignArtifact,
   MelakatEngineeringRuntime,
   MelakatPayload,
   MelakatSummaryArtifact,
@@ -22,6 +23,15 @@ type ResolvedCli = {
   source: "venv-windows" | "venv-posix" | "path";
 };
 
+type IntegrityInspectionCandidate = {
+  kind:
+    | "validation_failure"
+    | "reproducibility_mismatch"
+    | "run_count_mismatch"
+    | "validation_not_passed";
+  evidence: unknown;
+};
+
 const ACTIONS: MelakatAction[] = [
   "status",
   "validateExperiment",
@@ -29,6 +39,9 @@ const ACTIONS: MelakatAction[] = [
   "readCampaign",
   "readValidation",
   "compareConditions",
+  "evidenceSummary",
+  "findExtinctions",
+  "findAnomalies",
 ];
 
 const EVIDENCE_FILES = [
@@ -111,6 +124,39 @@ function joinProjectPath(...parts: string[]): string {
     .join("/");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function parseSha256Manifest(content: string): Record<string, string> {
+  const checksums: Record<string, string> = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.trim().match(/^([0-9a-fA-F]{64})\s+(.+)$/);
+    if (!match) continue;
+    checksums[match[2]] = match[1].toLowerCase();
+  }
+  return checksums;
+}
+
+function compactExtinctionRun(run: Record<string, unknown>): Record<string, unknown> {
+  const keys = [
+    "condition",
+    "seed",
+    "config_hash",
+    "result_checksum",
+    "active_population",
+    "births",
+    "deaths",
+    "faults",
+    "energy_pool",
+    "local_resource_total",
+  ];
+  return Object.fromEntries(
+    keys.filter((key) => key in run).map((key) => [key, run[key]]),
+  );
+}
+
 export class MelakatDriver implements Driver {
   readonly id = "melakat";
   readonly name = "Melakat Research Driver";
@@ -161,6 +207,12 @@ export class MelakatDriver implements Driver {
         return await this.readValidation(payload);
       case "compareConditions":
         return await this.compareConditions(payload);
+      case "evidenceSummary":
+        return await this.evidenceSummary(payload);
+      case "findExtinctions":
+        return await this.findExtinctions(payload);
+      case "findAnomalies":
+        return await this.findAnomalies(payload);
     }
   }
 
@@ -315,9 +367,7 @@ export class MelakatDriver implements Driver {
     const processPassed = result.success;
     const validationPassed = validation?.passed === true;
     const success = processPassed && validationPassed;
-    const evidencePaths = Object.fromEntries(
-      EVIDENCE_FILES.map((name) => [name, joinProjectPath(outputDir, name)]),
-    );
+    const evidencePaths = this.evidencePaths(outputDir);
 
     return {
       success,
@@ -343,7 +393,7 @@ export class MelakatDriver implements Driver {
     const projectRoot = this.resolveProjectRoot(payload);
     const outputDir = requireProjectRelativePath(payload.outputDir, "outputDir");
     const path = joinProjectPath(outputDir, "campaign.json");
-    const campaign = await this.readJsonArtifact<Record<string, unknown>>(
+    const campaign = await this.readJsonArtifact<MelakatCampaignArtifact>(
       projectRoot,
       path,
       "Melakat campaign artifact",
@@ -402,15 +452,171 @@ export class MelakatDriver implements Driver {
     };
   }
 
+  private async evidenceSummary(payload: MelakatPayload): Promise<DriverResult> {
+    const projectRoot = this.resolveProjectRoot(payload);
+    const outputDir = requireProjectRelativePath(payload.outputDir, "outputDir");
+    const [validation, summary, manifest] = await Promise.all([
+      this.readJsonArtifact<MelakatValidationArtifact>(
+        projectRoot,
+        joinProjectPath(outputDir, "validation.json"),
+        "Melakat validation artifact",
+      ),
+      this.readJsonArtifact<MelakatSummaryArtifact>(
+        projectRoot,
+        joinProjectPath(outputDir, "summary.json"),
+        "Melakat summary artifact",
+      ),
+      this.readTextArtifact(
+        projectRoot,
+        joinProjectPath(outputDir, "SHA256SUMS.txt"),
+        "Melakat checksum manifest",
+      ),
+    ]);
+
+    const checksums = parseSha256Manifest(manifest);
+    const result = {
+      scientificClaim: false,
+      experiment: summary.experiment ?? null,
+      runCount: summary.run_count ?? null,
+      conditionCount: summary.condition_count ?? null,
+      baselineCondition: summary.baseline_condition ?? null,
+      validation: {
+        passed: validation.passed === true,
+        failureCount: validation.failure_count ?? null,
+        expectedRuns: validation.expected_runs ?? null,
+        completedRuns: validation.completed_runs ?? null,
+        reproducibility: validation.reproducibility ?? null,
+      },
+      checksums,
+      evidencePaths: this.evidencePaths(outputDir),
+    };
+
+    return {
+      success: validation.passed === true,
+      message:
+        validation.passed === true
+          ? "Compact Melakat evidence summary built from canonical artifacts."
+          : "Melakat evidence summary built, but validation does not report passed=true.",
+      data: { projectRoot, outputDir, evidence: result },
+    };
+  }
+
+  private async findExtinctions(payload: MelakatPayload): Promise<DriverResult> {
+    const projectRoot = this.resolveProjectRoot(payload);
+    const outputDir = requireProjectRelativePath(payload.outputDir, "outputDir");
+    const campaign = await this.readJsonArtifact<MelakatCampaignArtifact>(
+      projectRoot,
+      joinProjectPath(outputDir, "campaign.json"),
+      "Melakat campaign artifact",
+    );
+    const runs = Array.isArray(campaign.runs) ? campaign.runs : [];
+    const extinctions = runs
+      .map(asRecord)
+      .filter((run): run is Record<string, unknown> => Boolean(run))
+      .filter((run) => Number(run.active_population) === 0)
+      .map(compactExtinctionRun);
+
+    return {
+      success: true,
+      message: `Melakat extinction scan completed (${extinctions.length} extinction run(s)).`,
+      data: {
+        projectRoot,
+        outputDir,
+        extinctionCount: extinctions.length,
+        extinctions,
+        interpretation:
+          "Extinction is reported as an observed run outcome only; this action does not infer its biological or evolutionary cause.",
+      },
+    };
+  }
+
+  private async findAnomalies(payload: MelakatPayload): Promise<DriverResult> {
+    const projectRoot = this.resolveProjectRoot(payload);
+    const outputDir = requireProjectRelativePath(payload.outputDir, "outputDir");
+    const validation = await this.readJsonArtifact<MelakatValidationArtifact>(
+      projectRoot,
+      joinProjectPath(outputDir, "validation.json"),
+      "Melakat validation artifact",
+    );
+    const candidates: IntegrityInspectionCandidate[] = [];
+
+    for (const failure of Array.isArray(validation.failures) ? validation.failures : []) {
+      candidates.push({ kind: "validation_failure", evidence: failure });
+    }
+
+    const reproducibility = asRecord(validation.reproducibility);
+    if (reproducibility?.identical === false) {
+      candidates.push({
+        kind: "reproducibility_mismatch",
+        evidence: reproducibility,
+      });
+    }
+
+    if (
+      typeof validation.expected_runs === "number" &&
+      typeof validation.completed_runs === "number" &&
+      validation.expected_runs !== validation.completed_runs
+    ) {
+      candidates.push({
+        kind: "run_count_mismatch",
+        evidence: {
+          expected_runs: validation.expected_runs,
+          completed_runs: validation.completed_runs,
+        },
+      });
+    }
+
+    if (validation.passed !== true && candidates.length === 0) {
+      candidates.push({
+        kind: "validation_not_passed",
+        evidence: {
+          passed: validation.passed ?? null,
+          failure_count: validation.failure_count ?? null,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Melakat integrity scan completed (${candidates.length} inspection candidate(s)).`,
+      data: {
+        projectRoot,
+        outputDir,
+        integrityPassed: validation.passed === true && candidates.length === 0,
+        candidateCount: candidates.length,
+        candidates,
+        interpretation:
+          "These are experimental-integrity inspection candidates from canonical validation evidence, not claims of biological anomaly, adaptation, cooperation, competition, or selection.",
+      },
+    };
+  }
+
+  private evidencePaths(outputDir: string): Record<string, string> {
+    return Object.fromEntries(
+      EVIDENCE_FILES.map((name) => [name, joinProjectPath(outputDir, name)]),
+    );
+  }
+
+  private async readTextArtifact(
+    projectRoot: string,
+    path: string,
+    label: string,
+  ): Promise<string> {
+    const result = await this.engineeringRuntime.execute("fs.readFile", {
+      projectRoot,
+      path,
+    });
+    return readContent(result, label);
+  }
+
   private async readJsonArtifact<T extends Record<string, unknown>>(
     projectRoot: string,
     path: string,
     label: string,
   ): Promise<T> {
-    const result = await this.engineeringRuntime.execute("fs.readFile", {
-      projectRoot,
-      path,
-    });
-    return parseJsonObject<T>(readContent(result, label), label);
+    return parseJsonObject<T>(
+      await this.readTextArtifact(projectRoot, path, label),
+      label,
+    );
   }
 }

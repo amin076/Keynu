@@ -78,6 +78,9 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
     ["melakat.readCampaign", "readCampaign", "Read the canonical Melakat campaign artifact."],
     ["melakat.readValidation", "readValidation", "Read and evaluate the canonical Melakat validation artifact."],
     ["melakat.compareConditions", "compareConditions", "Read baseline, condition, and comparison evidence from Melakat summary artifacts."],
+    ["melakat.evidenceSummary", "evidenceSummary", "Build a compact evidence/checksum summary from canonical Melakat artifacts."],
+    ["melakat.findExtinctions", "findExtinctions", "Identify runs whose recorded final active population is zero without inferring cause."],
+    ["melakat.findAnomalies", "findAnomalies", "Identify canonical experimental-integrity inspection candidates without biological interpretation."],
   ] as const;
 
   for (const [name, action, description] of melakatCapabilities) {
