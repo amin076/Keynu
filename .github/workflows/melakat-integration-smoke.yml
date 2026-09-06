@@ -1,0 +1,82 @@
+name: Melakat cross-repository smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    paths:
+      - "src/drivers/melakat/**"
+      - "scripts/run-melakat-integration-smoke.mjs"
+      - ".github/workflows/melakat-integration-smoke.yml"
+  pull_request:
+    paths:
+      - "src/drivers/melakat/**"
+      - "scripts/run-melakat-integration-smoke.mjs"
+      - ".github/workflows/melakat-integration-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Keynu
+        uses: actions/checkout@v4
+        with:
+          path: keynu
+
+      - name: Check out Melakat
+        uses: actions/checkout@v4
+        with:
+          repository: amin076/melakat
+          ref: main
+          path: melakat
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: keynu/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Keynu dependencies
+        working-directory: keynu
+        run: npm ci
+
+      - name: Build Keynu
+        working-directory: keynu
+        run: npm run build
+
+      - name: Install Melakat experiment CLI
+        run: python -m pip install --no-deps -e melakat/desktop
+
+      - name: Run Keynu -> Melakat integration smoke
+        working-directory: keynu
+        env:
+          MELAKAT_SMOKE_PROJECT_ROOT: ../melakat
+          MELAKAT_SMOKE_SPEC_PATH: experiments/phase-two/local-resource-energy-sweep.json
+          MELAKAT_SMOKE_OUTPUT_DIR: results/keynu-integration-smoke
+          MELAKAT_SMOKE_TICKS: "40"
+          MELAKAT_SMOKE_SEED_COUNT: "1"
+          MELAKAT_SMOKE_SEED_START: "1"
+        run: node scripts/run-melakat-integration-smoke.mjs | tee melakat-integration-smoke.log
+
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: melakat-keynu-smoke-${{ github.run_id }}
+          path: |
+            keynu/melakat-integration-smoke.log
+            melakat/results/keynu-integration-smoke
+          if-no-files-found: ignore
+          retention-days: 14
