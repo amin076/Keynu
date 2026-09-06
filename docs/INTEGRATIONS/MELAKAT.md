@@ -1,6 +1,6 @@
 # Melakat Integration Foundation
 
-Status: MelakatDriver v1 implemented; real cross-repository campaign smoke and restart/resume proof pending
+Status: MelakatDriver and real cross-repository campaign smoke verified; evidence-discovery actions added; restart/resume proof pending
 
 ## Purpose
 
@@ -52,8 +52,9 @@ The mission focuses on:
 
 - validating Melakat experiment specifications;
 - running headless campaigns through the existing `melakat-experiment` CLI;
-- reading `campaign.json`, `summary.json`, `validation.json`, `runs.csv`, `comparison.csv`, provenance, and checksums;
-- identifying extinctions/anomalous runs for targeted GUI inspection;
+- reading canonical campaign/summary/validation/checksum evidence;
+- identifying observed extinction runs for targeted inspection without inferring cause;
+- surfacing experimental-integrity failures such as failed invariants, reproducibility mismatch, or incomplete run counts;
 - preserving scientific controls and reproducibility;
 - proving restart/resume behavior through Keynu mission persistence.
 
@@ -69,7 +70,7 @@ MelakatDriver does **not** implement its own:
 
 Those remain shared Engineering Runtime responsibilities.
 
-MelakatDriver v1 currently implements:
+The current driver capabilities are:
 
 ```text
 melakat.status
@@ -78,9 +79,12 @@ melakat.runExperiment
 melakat.readCampaign
 melakat.readValidation
 melakat.compareConditions
+melakat.evidenceSummary
+melakat.findExtinctions
+melakat.findAnomalies
 ```
 
-The next domain layer will add targeted evidence discovery such as extinction/anomaly inspection without weakening the scientific interpretation rules.
+`melakat.findAnomalies` is intentionally an **experimental-integrity** inspection action. It does not label organisms, genotypes, behavior, or ecology as biologically anomalous. It only surfaces canonical validation evidence such as invariant failures, failed reproducibility, run-count mismatch, or a non-passing validation artifact.
 
 ## Current Melakat CLI contract
 
@@ -125,14 +129,38 @@ The driver returns repository-relative evidence references rather than moving sc
 
 `melakat.compareConditions` does not invent a new comparison algorithm. It reads the canonical `baseline_condition`, `conditions`, and `comparisons` already produced by Melakat's `summary.json`.
 
+`melakat.evidenceSummary` compresses canonical evidence for KAP/mission use without replacing the underlying files. It reports run/condition counts, baseline, validation status, reproducibility evidence, the SHA256 manifest, and repository-relative evidence paths.
+
+`melakat.findExtinctions` scans canonical campaign run records for `active_population === 0`. An extinction result is an observed run outcome only; the action does not infer why it occurred.
+
+## Verified real cross-repository smoke
+
+The first real Keynu -> Melakat smoke passed in GitHub Actions on 2026-09-06:
+
+```text
+Keynu branch head: cd8c98404697f83acb5a8b0838999d3acbd78f52
+Melakat source:     3c9f49a3bc0993ad95e226df88412a0ba689e3bb
+Smoke run:          34039786447
+PR smoke run:       34039862056
+```
+
+The workflow checked out both repositories, built Keynu, installed the real Melakat experiment entry point, and invoked the real Phase Two energy-sweep specification through MelakatDriver. The reduced integration smoke used one seed and 40 ticks, yielding three condition runs. Validation passed with zero failures and deterministic repeat equality.
+
+The smoke is **not** a scientific campaign and makes **no new scientific claim**. Its purpose is only to prove the integration path and canonical evidence readback. Persistent details are recorded in:
+
+```text
+docs/INTEGRATIONS/MELAKAT_SMOKE_EVIDENCE_2026-09-06.md
+```
+
 ## Scientific rule
 
-Automated execution does not weaken scientific discipline. Keynu may automate controlled runs and summarize evidence, but it must not infer adaptation, cooperation, competition, selection, or navigation beyond what the Melakat experiment design and results causally support.
+Automated execution does not weaken scientific discipline. Keynu may automate controlled runs and summarize evidence, but it must not infer adaptation, cooperation, competition, selection, navigation, or causal biological explanations beyond what the Melakat experiment design and results support.
 
 ## Remaining proof obligations
 
-MelakatDriver unit/regression coverage verifies command construction, virtual-environment CLI resolution, project-relative path containment, process-plus-validation gating, and canonical artifact reading. The remaining integration milestones are:
+The remaining integration milestones are:
 
-- run a small real Melakat campaign through Keynu against the actual Melakat repository;
-- parse targeted extinction/anomaly inspection candidates from real artifacts;
-- prove restart/resume after persisted Melakat work without replaying completed side effects.
+- validate the evidence-discovery actions against the real cross-repository smoke workflow;
+- prove restart/resume after persisted Melakat work without replaying completed side effects;
+- use the verified integration for controlled Phase Three development/research;
+- keep workflow-continuation and mission-continuation architecture reconciled as Keynu evolves.

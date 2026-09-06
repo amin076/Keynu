@@ -79,9 +79,34 @@ const comparison = await driver.execute({
 });
 assert.equal(comparison.success, true);
 
+const evidenceSummary = await driver.execute({
+  action: "evidenceSummary",
+  payload: { outputDir },
+});
+assert.equal(
+  evidenceSummary.success,
+  true,
+  `Melakat evidence summary failed: ${JSON.stringify(evidenceSummary.data)}`,
+);
+
+const extinctions = await driver.execute({
+  action: "findExtinctions",
+  payload: { outputDir },
+});
+assert.equal(extinctions.success, true);
+
+const anomalies = await driver.execute({
+  action: "findAnomalies",
+  payload: { outputDir },
+});
+assert.equal(anomalies.success, true);
+
 const campaignData = campaign.data?.campaign || {};
 const validationData = validation.data?.validation || {};
 const comparisonData = comparison.data || {};
+const compactEvidence = evidenceSummary.data?.evidence || {};
+const extinctionData = extinctions.data || {};
+const anomalyData = anomalies.data || {};
 const runs = Array.isArray(campaignData.runs) ? campaignData.runs : [];
 const conditions = Array.isArray(comparisonData.conditions)
   ? comparisonData.conditions
@@ -89,10 +114,19 @@ const conditions = Array.isArray(comparisonData.conditions)
 const comparisons = Array.isArray(comparisonData.comparisons)
   ? comparisonData.comparisons
   : [];
+const evidenceChecksums = compactEvidence.checksums || {};
 
 assert.equal(validationData.passed, true);
+assert.equal(compactEvidence.validation?.passed, true);
+assert.equal(anomalyData.integrityPassed, true);
+assert.equal(anomalyData.candidateCount, 0);
 assert(runs.length >= 1, "Smoke campaign returned no runs.");
 assert(conditions.length >= 1, "Smoke campaign returned no condition summaries.");
+assert(
+  Object.keys(evidenceChecksums).length >= 6,
+  "Smoke evidence summary did not parse the expected checksum manifest.",
+);
+assert.equal(typeof extinctionData.extinctionCount, "number");
 
 const evidence = {
   kind: "melakat-keynu-cross-repo-smoke",
@@ -113,6 +147,9 @@ const evidence = {
   baselineCondition: comparisonData.baselineCondition ?? null,
   conditionCount: conditions.length,
   comparisonCount: comparisons.length,
+  evidenceChecksumCount: Object.keys(evidenceChecksums).length,
+  extinctionCount: extinctionData.extinctionCount,
+  integrityCandidateCount: anomalyData.candidateCount,
   driverCli: status.data?.cli ?? null,
 };
 

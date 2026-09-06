@@ -76,6 +76,9 @@ const root = resolve("/tmp/keynu-melakat-driver-fixture");
     "readCampaign",
     "readValidation",
     "compareConditions",
+    "evidenceSummary",
+    "findExtinctions",
+    "findAnomalies",
   ]);
 
   const status = await driver.execute({ action: "status" });
@@ -201,20 +204,63 @@ const root = resolve("/tmp/keynu-melakat-driver-fixture");
     "results/campaign/campaign.json",
     JSON.stringify({
       experiment: "smoke",
-      runs: [{ condition: "base", seed: 1, active_population: 31 }],
+      runs: [
+        {
+          condition: "base",
+          seed: 1,
+          active_population: 31,
+          config_hash: "config-base",
+          result_checksum: "result-base",
+        },
+        {
+          condition: "resource_limited",
+          seed: 2,
+          active_population: 0,
+          births: 4,
+          deaths: 16,
+          faults: 1,
+          energy_pool: 0.5,
+          local_resource_total: 120.0,
+          config_hash: "config-extinct",
+          result_checksum: "result-extinct",
+        },
+      ],
     }),
   );
   runtime.files.set(
     "results/campaign/summary.json",
     JSON.stringify({
+      experiment: "smoke",
+      run_count: 2,
+      condition_count: 2,
       baseline_condition: "base",
-      conditions: [{ condition: "base", run_count: 1 }],
-      comparisons: [{ condition: "variant", active_population_mean_delta: -2 }],
+      conditions: [
+        { condition: "base", run_count: 1 },
+        { condition: "resource_limited", run_count: 1 },
+      ],
+      comparisons: [
+        { condition: "resource_limited", active_population_mean_delta: -31 },
+      ],
     }),
   );
   runtime.files.set(
     "results/campaign/validation.json",
-    JSON.stringify({ passed: true, failure_count: 0 }),
+    JSON.stringify({
+      passed: true,
+      failure_count: 0,
+      failures: [],
+      expected_runs: 2,
+      completed_runs: 2,
+      reproducibility: {
+        identical: true,
+        reference_checksum: "a".repeat(64),
+        repeat_checksum: "a".repeat(64),
+      },
+    }),
+  );
+  runtime.files.set(
+    "results/campaign/SHA256SUMS.txt",
+    `${"1".repeat(64)}  campaign.json\n${"2".repeat(64)}  summary.json\n${"3".repeat(64)}  validation.json\n`,
   );
   const driver = new MelakatDriver({ engineeringRuntime: runtime, projectRoot: root });
 
@@ -240,7 +286,88 @@ const root = resolve("/tmp/keynu-melakat-driver-fixture");
   const comparisonData = comparisonResult.data as any;
   assert.equal(comparisonData.baselineCondition, "base");
   assert.equal(comparisonData.comparisons.length, 1);
-  assert.equal(comparisonData.comparisons[0].active_population_mean_delta, -2);
+  assert.equal(comparisonData.comparisons[0].active_population_mean_delta, -31);
+
+  const evidenceResult = await driver.execute({
+    action: "evidenceSummary",
+    payload: { outputDir: "results/campaign" },
+  });
+  assert.equal(evidenceResult.success, true);
+  const evidence = (evidenceResult.data as any).evidence;
+  assert.equal(evidence.scientificClaim, false);
+  assert.equal(evidence.experiment, "smoke");
+  assert.equal(evidence.runCount, 2);
+  assert.equal(evidence.conditionCount, 2);
+  assert.equal(evidence.validation.passed, true);
+  assert.equal(evidence.validation.completedRuns, 2);
+  assert.equal(evidence.checksums["summary.json"], "2".repeat(64));
+
+  const extinctionResult = await driver.execute({
+    action: "findExtinctions",
+    payload: { outputDir: "results/campaign" },
+  });
+  assert.equal(extinctionResult.success, true);
+  const extinctionData = extinctionResult.data as any;
+  assert.equal(extinctionData.extinctionCount, 1);
+  assert.equal(extinctionData.extinctions[0].condition, "resource_limited");
+  assert.equal(extinctionData.extinctions[0].seed, 2);
+  assert.equal(extinctionData.extinctions[0].active_population, 0);
+  assert.match(extinctionData.interpretation, /does not infer/i);
+
+  const anomalyResult = await driver.execute({
+    action: "findAnomalies",
+    payload: { outputDir: "results/campaign" },
+  });
+  assert.equal(anomalyResult.success, true);
+  const anomalyData = anomalyResult.data as any;
+  assert.equal(anomalyData.integrityPassed, true);
+  assert.equal(anomalyData.candidateCount, 0);
+  assert.match(anomalyData.interpretation, /not claims of biological anomaly/i);
+}
+
+{
+  const runtime = new FakeEngineeringRuntime();
+  runtime.files.set(
+    "results/integrity-failure/validation.json",
+    JSON.stringify({
+      passed: false,
+      failure_count: 2,
+      failures: [
+        { kind: "energy_balance", error: 0.01, tolerance: 1e-7 },
+        { kind: "out_of_bounds", organism_id: 9 },
+      ],
+      expected_runs: 3,
+      completed_runs: 2,
+      reproducibility: {
+        identical: false,
+        reference_checksum: "a".repeat(64),
+        repeat_checksum: "b".repeat(64),
+      },
+    }),
+  );
+  const driver = new MelakatDriver({ engineeringRuntime: runtime, projectRoot: root });
+  const result = await driver.execute({
+    action: "findAnomalies",
+    payload: { outputDir: "results/integrity-failure" },
+  });
+
+  assert.equal(result.success, true);
+  const data = result.data as any;
+  assert.equal(data.integrityPassed, false);
+  assert.equal(data.candidateCount, 4);
+  assert.equal(
+    data.candidates.filter((candidate: any) => candidate.kind === "validation_failure").length,
+    2,
+  );
+  assert.equal(
+    data.candidates.some((candidate: any) => candidate.kind === "reproducibility_mismatch"),
+    true,
+  );
+  assert.equal(
+    data.candidates.some((candidate: any) => candidate.kind === "run_count_mismatch"),
+    true,
+  );
+  assert.match(data.interpretation, /experimental-integrity/i);
 }
 
 {
