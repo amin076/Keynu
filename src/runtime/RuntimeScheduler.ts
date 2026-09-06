@@ -20,6 +20,13 @@ export interface RuntimeJob {
   payload?: unknown;
 }
 
+/**
+ * Legacy in-memory scheduler retained for workflow compatibility.
+ *
+ * This queue is not restart-safe and is not the scheduler/continuation
+ * authority used by the active BrowserAgent mission runtime. New durable
+ * continuation work must use the canonical mission continuation path.
+ */
 export class RuntimeScheduler {
   private readonly queue: RuntimeJob[] = [];
 
