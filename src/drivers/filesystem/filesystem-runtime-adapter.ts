@@ -5,21 +5,35 @@ import {
   readdir,
   writeFile,
 } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { isProtectedMemoryPath } from "../../memory/ProtectedMemoryPolicy.js";
 import type {
   FileSystemRequest,
   FileSystemResult,
 } from "./filesystem-types.js";
 
-function safePath(cwd: string, inputPath: string): string {
+function safePath(cwd: string, inputPath: string): { fullPath: string; relativePath: string } {
   const root = resolve(cwd);
   const fullPath = resolve(root, inputPath);
+  const relativePath = relative(root, fullPath);
 
-  if (fullPath !== root && !fullPath.startsWith(root + "\\")) {
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
+    isAbsolute(relativePath)
+  ) {
     throw new Error("Path is outside the approved workspace.");
   }
 
-  return fullPath;
+  return { fullPath, relativePath: relativePath || "." };
+}
+
+function assertGenericWriteAllowed(relativePath: string): void {
+  if (isProtectedMemoryPath(relativePath)) {
+    throw new Error(
+      "PROTECTED_MEMORY_PATH: generic filesystem writes cannot modify protected repository memory; use the protected memory/file-ops path instead.",
+    );
+  }
 }
 
 export async function executeFileSystemRequest(
@@ -34,7 +48,8 @@ export async function executeFileSystemRequest(
     throw new Error("Filesystem request requires action");
   }
 
-  const path = safePath(cwd, request.path);
+  const resolvedPath = safePath(cwd, request.path);
+  const path = resolvedPath.fullPath;
 
   switch (request.action) {
     case "readFile":
@@ -48,6 +63,7 @@ export async function executeFileSystemRequest(
         throw new Error("writeFile requires string content");
       }
 
+      assertGenericWriteAllowed(resolvedPath.relativePath);
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, request.content, "utf8");
       return {
