@@ -75,7 +75,7 @@ try {
 
   const status = await runtime.execute("git.status", { projectRoot: root });
   assert.equal(status.success, true);
-  assert.match(JSON.stringify(status.data), /example\.txt/);
+  assert.match(JSON.stringify(status.data), /\?\? src\//);
 
   const branch = await runtime.execute("git.createBranch", {
     projectRoot: root,
