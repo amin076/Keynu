@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { normalize, sep } from "node:path";
+import { posix } from "node:path";
 
 export type MemoryWriteMode = "replace" | "append";
 
@@ -22,15 +22,26 @@ export type ProtectedMemoryWriteDecision = {
   reason?: string;
 };
 
-const PROTECTED_MEMORY_PREFIX = `.keynu${sep}memory${sep}`;
+const PROTECTED_MEMORY_ROOT = ".keynu/memory";
+const PROTECTED_MEMORY_PREFIX = `${PROTECTED_MEMORY_ROOT}/`;
 
 export function sha256Text(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 export function isProtectedMemoryPath(relativePath: string): boolean {
-  const normalized = normalize(relativePath).replace(/^([.][\\/])+/, "");
-  return normalized === `.keynu${sep}memory` || normalized.startsWith(PROTECTED_MEMORY_PREFIX);
+  // KAP/jobs may carry paths produced by either Windows or POSIX clients.
+  // Canonicalize separators before normalizing so protection is identical on
+  // every host platform running Keynu.
+  const slashNormalized = relativePath.replace(/\\/g, "/");
+  const normalized = posix
+    .normalize(slashNormalized)
+    .replace(/^(?:\.\/)+/, "");
+
+  return (
+    normalized === PROTECTED_MEMORY_ROOT ||
+    normalized.startsWith(PROTECTED_MEMORY_PREFIX)
+  );
 }
 
 export function evaluateProtectedMemoryWrite(
