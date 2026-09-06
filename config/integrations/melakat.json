@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "keynu-app-manifest-0.1",
+  "id": "melakat",
+  "name": "Melakat",
+  "description": "Research-first digital evolution simulator with headless experiment and scientific evidence interfaces.",
+  "projectId": "melakat",
+  "rootEnv": "KEYNU_PROJECT_ROOT_MELAKAT",
+  "connectors": [
+    {
+      "id": "experiment-cli",
+      "kind": "cli",
+      "config": {
+        "command": "melakat-experiment"
+      }
+    },
+    {
+      "id": "artifacts",
+      "kind": "file"
+    }
+  ],
+  "capabilities": [
+    { "name": "status", "risk": "read", "handler": "pack", "description": "Inspect the configured Melakat project and experiment interface." },
+    { "name": "validateExperiment", "risk": "execute", "handler": "pack", "description": "Validate a Melakat experiment specification through the repository CLI." },
+    { "name": "runExperiment", "risk": "execute", "handler": "pack", "description": "Run a controlled Melakat experiment campaign and require passing validation evidence." },
+    { "name": "readCampaign", "risk": "read", "handler": "pack", "description": "Read the canonical Melakat campaign artifact." },
+    { "name": "readValidation", "risk": "read", "handler": "pack", "description": "Read and evaluate the canonical Melakat validation artifact." },
+    { "name": "compareConditions", "risk": "read", "handler": "pack", "description": "Read baseline, condition, and comparison evidence from Melakat summary artifacts." },
+    { "name": "evidenceSummary", "risk": "read", "handler": "pack", "description": "Build a compact evidence/checksum summary from canonical Melakat artifacts." },
+    { "name": "findExtinctions", "risk": "read", "handler": "pack", "description": "Identify runs whose recorded final active population is zero without inferring cause." },
+    { "name": "findAnomalies", "risk": "read", "handler": "pack", "description": "Identify canonical experimental-integrity inspection candidates without biological interpretation." }
+  ]
+}

@@ -5,22 +5,32 @@ import { DehleroDriver } from "../drivers/dehlero/DehleroDriver.js";
 import { FileSystemDriver } from "../drivers/filesystem/FileSystemDriver.js";
 import { MelakatDriver } from "../drivers/melakat/MelakatDriver.js";
 import { EngineeringDriver } from "../engineering/EngineeringDriver.js";
+import { IntegrationDriver } from "../integrations/IntegrationDriver.js";
+import { createBuiltinIntegrationHub } from "../integrations/registerBuiltinIntegrations.js";
 
 export async function registerBuiltinDrivers(
   manager: DriverManager,
   capabilities?: CapabilityRegistry,
 ): Promise<void> {
-  // Keep the legacy filesystem driver registered for KAP 1.0 compatibility.
-  // New software-development integrations should depend on the central
-  // Engineering Runtime instead of duplicating filesystem/shell/Git logic.
+  // Keep legacy drivers registered for direct KAP 1.0 commands while application
+  // capabilities move to the Integration Hub. New applications should register
+  // manifests/connectors/packs rather than adding a per-app Driver to Keynu core.
   manager.register(new FileSystemDriver());
   manager.register(new EngineeringDriver());
+  manager.register(
+    new IntegrationDriver({
+      hub: createBuiltinIntegrationHub(),
+      capabilityRegistry: capabilities,
+    }),
+  );
   manager.register(new MelakatDriver());
   manager.register(new DehleroDriver());
   manager.register(new BlenderDriver());
 
   registerBuiltinCapabilities(capabilities);
 
+  // IntegrationDriver.initialize() loads config/integrations/*.json and registers
+  // app capabilities dynamically into CapabilityRegistry.
   await manager.initialize();
 }
 
@@ -71,45 +81,43 @@ function registerBuiltinCapabilities(capabilities?: CapabilityRegistry): void {
     });
   }
 
-  const melakatCapabilities = [
-    ["melakat.status", "status", "Inspect the configured Melakat project and experiment interface."],
-    ["melakat.validateExperiment", "validateExperiment", "Validate a Melakat experiment specification through the repository CLI."],
-    ["melakat.runExperiment", "runExperiment", "Run a controlled Melakat experiment campaign and require passing validation evidence."],
-    ["melakat.readCampaign", "readCampaign", "Read the canonical Melakat campaign artifact."],
-    ["melakat.readValidation", "readValidation", "Read and evaluate the canonical Melakat validation artifact."],
-    ["melakat.compareConditions", "compareConditions", "Read baseline, condition, and comparison evidence from Melakat summary artifacts."],
-    ["melakat.evidenceSummary", "evidenceSummary", "Build a compact evidence/checksum summary from canonical Melakat artifacts."],
-    ["melakat.findExtinctions", "findExtinctions", "Identify runs whose recorded final active population is zero without inferring cause."],
-    ["melakat.findAnomalies", "findAnomalies", "Identify canonical experimental-integrity inspection candidates without biological interpretation."],
+  const integrationCapabilities = [
+    ["integration.listApps", "listApps", "List applications registered with the Keynu Integration Hub."],
+    ["integration.describeApp", "describeApp", "Describe one registered application manifest."],
+    ["integration.listCapabilities", "listCapabilities", "List declared capabilities and risk metadata for one application."],
+    ["integration.invoke", "invoke", "Invoke a declared application capability through its registered connector or integration pack."],
   ] as const;
 
-  for (const [name, action, description] of melakatCapabilities) {
+  for (const [name, action, description] of integrationCapabilities) {
     capabilities.register({
       name,
-      driver: "melakat",
+      driver: "integration",
       action,
       description,
     });
   }
 
+  // melakat.* capabilities are intentionally not hard-coded here. They are
+  // loaded from config/integrations/melakat.json by IntegrationDriver.
+
   capabilities.register({
     name: "dehlero.ping",
     driver: "dehlero",
     action: "ping",
-    description: "Check whether Dehlero runtime API is reachable.",
+    description: "Legacy compatibility capability: check whether Dehlero runtime API is reachable.",
   });
 
   capabilities.register({
     name: "dehlero.sendCommand",
     driver: "dehlero",
     action: "sendCommand",
-    description: "Send a command payload to the Dehlero runtime API.",
+    description: "Legacy compatibility capability: send a command payload to the Dehlero runtime API.",
   });
 
   capabilities.register({
     name: "blender.status",
     driver: "blender",
     action: "status",
-    description: "Detect Blender executable and report Blender driver status.",
+    description: "Legacy compatibility capability: detect Blender executable and report driver status.",
   });
 }
