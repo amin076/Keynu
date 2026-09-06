@@ -18,6 +18,17 @@ function objectOrUndefined(value: unknown, label: string): Record<string, unknow
   return value as Record<string, unknown>;
 }
 
+function stringRecordOrUndefined(value: unknown, label: string): Record<string, string> | undefined {
+  const record = objectOrUndefined(value, label);
+  if (!record) return undefined;
+  const normalized: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (typeof entry !== "string") throw new Error(`${label}.${key} must be a string.`);
+    normalized[key] = entry;
+  }
+  return normalized;
+}
+
 export class HttpConnector implements IntegrationConnector {
   readonly kind = "http" as const;
 
@@ -58,8 +69,8 @@ export class HttpConnector implements IntegrationConnector {
       params: objectOrUndefined(context.input.query, "HTTP input.query"),
       data: context.input.body,
       headers: {
-        ...objectOrUndefined(config.headers, `HTTP connector '${connector.id}' headers`),
-        ...objectOrUndefined(request.headers, `HTTP capability '${context.capability.name}' request.headers`),
+        ...stringRecordOrUndefined(config.headers, `HTTP connector '${connector.id}' headers`),
+        ...stringRecordOrUndefined(request.headers, `HTTP capability '${context.capability.name}' request.headers`),
       },
       timeout,
       validateStatus: () => true,
