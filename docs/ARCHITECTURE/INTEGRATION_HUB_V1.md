@@ -22,7 +22,8 @@ Integration Hub compatibility bridge
    +-- ConnectorRegistry
    |      +-- CLIConnector ---- Engineering Runtime
    |      +-- FileConnector --- Engineering Runtime
-   |      +-- future: HTTP / MCP / Browser / WebSocket
+   |      +-- HTTPConnector --- manifest-governed HTTP/HTTPS
+   |      +-- future: MCP / Browser / WebSocket
    |
    +-- optional Integration Packs
           +-- Melakat domain semantics
@@ -32,7 +33,7 @@ Integration Hub compatibility bridge
 
 ## App manifests
 
-App manifests use schema `keynu-app-manifest-0.1` and are discovered from `config/integrations/*.json` during IntegrationDriver initialization.
+App manifests use schema `keynu-app-manifest-0.1` and are discovered from `config/integrations/*.json` during IntegrationDriver initialization. Discovery is relative to the Keynu module/repository rather than the caller's current working directory, so `npm start` does not depend on being launched from one specific shell location.
 
 Example:
 
@@ -71,7 +72,7 @@ A manifest capability declares:
 - `risk` — `read`, `write`, or `execute`;
 - `handler` — `connector` (default) or `pack`;
 - `connector` — connector id when using generic connection mechanics;
-- `request` — trusted static request configuration such as CLI args or file operation.
+- `request` — trusted static request configuration such as CLI args, HTTP path/method, or file operation.
 
 The runtime-visible capability name is `<app-id>.<capability>`.
 
@@ -109,6 +110,18 @@ Supports project-scoped:
 - `createFolder`
 
 All operations delegate to Engineering Runtime and therefore inherit workspace containment and protected-memory policy.
+
+### HTTPConnector
+
+HTTP applications can also register without a per-app Driver. The connector:
+
+- accepts only manifest-declared `http`/`https` base URLs;
+- requires a manifest-declared relative capability path and method;
+- prevents invocation input from replacing the origin with an arbitrary URL;
+- accepts invocation query/body data while keeping destination and static headers under trusted manifest control;
+- treats only 2xx responses as successful.
+
+This is suitable for application APIs that do not require special domain interpretation. Authentication/secret-provider policy is intentionally not invented in v1; secrets should not be embedded in manifests.
 
 ## Integration Packs
 
