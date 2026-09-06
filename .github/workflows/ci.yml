@@ -29,5 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and run all compiled tests
-        run: npm test
+      - name: Build TypeScript and dashboard
+        run: npm run build
+
+      - name: Run all compiled tests
+        run: node scripts/run-all-tests.mjs
