@@ -2,7 +2,9 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const roots = ['dist/src', 'dist/scripts'];
+// tsconfig.json uses rootDir=src and outDir=dist, so compiled tests live
+// directly below dist/<module>/... rather than dist/src/<module>/....
+const roots = ['dist'];
 const skippedNameFragments = [
   '.live.',
   '.manual.',
@@ -28,7 +30,7 @@ function collectTests(root) {
 
 const tests = roots.flatMap(collectTests).sort();
 if (tests.length === 0) {
-  console.error('No compiled Keynu tests were discovered.');
+  console.error('No compiled Keynu tests were discovered under dist/.');
   process.exit(1);
 }
 
