@@ -5,7 +5,13 @@
       "id": "keynu",
       "name": "Keynu",
       "root": ".",
-      "activeMissionId": "openai-build-week"
+      "activeMissionId": "runtime-readiness-melakat"
+    },
+    {
+      "id": "melakat",
+      "name": "Melakat",
+      "root": "../melakat",
+      "activeMissionId": "melakat-development"
     }
   ]
 }
