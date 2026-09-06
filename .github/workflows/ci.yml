@@ -1,0 +1,56 @@
+name: Keynu validation
+
+on:
+  push:
+    branches:
+      - main
+      - "audit/**"
+      - "feat/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build TypeScript and dashboard
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee keynu-build.log
+
+      - name: Run all compiled tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/run-all-tests.mjs 2>&1 | tee keynu-tests.log
+
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keynu-validation-diagnostics-${{ github.run_id }}
+          path: |
+            keynu-build.log
+            keynu-tests.log
+          if-no-files-found: ignore
+          retention-days: 7

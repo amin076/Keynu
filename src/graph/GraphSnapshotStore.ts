@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { GraphSnapshot } from "./GraphTypes.js";
 
@@ -23,6 +23,19 @@ export class GraphSnapshotStore {
   }
 
   read(): GraphSnapshot {
+    // A clean Keynu checkout has no runtime graph snapshot yet. Query and
+    // dashboard services must still be usable before the first scan rather
+    // than turning absence of runtime state into HTTP 500 errors.
+    if (!existsSync(this.snapshotPath)) {
+      return {
+        version: "1.0",
+        projectRoot: process.cwd(),
+        generatedAt: new Date(0).toISOString(),
+        nodes: [],
+        edges: [],
+      };
+    }
+
     const snapshot = JSON.parse(
       readFileSync(this.snapshotPath, "utf8"),
     ) as GraphSnapshot;

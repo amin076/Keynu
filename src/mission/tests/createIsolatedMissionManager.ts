@@ -16,6 +16,14 @@ export type IsolatedMissionManagerFixture = {
   dispose(): void;
 };
 
+const REQUIRED_MEMORY_FILES = [
+  "current_state.md",
+  "architecture.md",
+  "decisions.md",
+  "next_steps.md",
+  "startup_prompt.md",
+] as const;
+
 function runGit(root: string, args: string[]): void {
   execFileSync("git", args, {
     cwd: root,
@@ -32,16 +40,21 @@ export function createIsolatedMissionManager(): IsolatedMissionManagerFixture {
     join(root, "config", "missions"),
     { recursive: true },
   );
-  cpSync(
-    join(process.cwd(), ".keynu", "missions"),
-    join(root, ".keynu", "missions"),
-    { recursive: true },
-  );
-  cpSync(
-    join(process.cwd(), ".keynu", "memory"),
-    join(root, ".keynu", "memory"),
-    { recursive: true },
-  );
+
+  // Local runtime state under .keynu is deliberately not repository source
+  // truth and may be absent in a clean checkout/CI runner. Tests create their
+  // own deterministic state and memory instead of copying a developer's live
+  // machine state.
+  mkdirSync(join(root, ".keynu", "missions"), { recursive: true });
+  const memoryRoot = join(root, ".keynu", "memory");
+  mkdirSync(memoryRoot, { recursive: true });
+  for (const name of REQUIRED_MEMORY_FILES) {
+    writeFileSync(
+      join(memoryRoot, name),
+      `# ${name}\n\nDeterministic Keynu mission test fixture.\n`,
+      "utf8",
+    );
+  }
 
   writeFileSync(
     join(root, "package.json"),

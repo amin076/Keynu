@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 export type StoredJobState =
@@ -14,10 +14,17 @@ export type StoredJob = {
   state: StoredJobState;
   updatedAt: string;
   reportId?: string;
+  reportText?: string;
+  reportDeliveredAt?: string;
 };
 
 type JobStoreData = {
   jobs: Record<string, StoredJob>;
+};
+
+export type JobClaimResult = {
+  created: boolean;
+  record: StoredJob;
 };
 
 export class PersistentJobStore {
@@ -36,19 +43,92 @@ export class PersistentJobStore {
     return Boolean(await this.get(jobId));
   }
 
+  async claim(jobId: string): Promise<JobClaimResult> {
+    const data = await this.load();
+    const existing = data.jobs[jobId];
+
+    if (existing) {
+      return { created: false, record: existing };
+    }
+
+    const record: StoredJob = {
+      jobId,
+      state: "RECEIVED",
+      updatedAt: new Date().toISOString(),
+    };
+    data.jobs[jobId] = record;
+    await this.save(data);
+    return { created: true, record };
+  }
+
   async set(
     jobId: string,
     state: StoredJobState,
     reportId?: string,
-  ): Promise<void> {
+  ): Promise<StoredJob> {
     const data = await this.load();
-    data.jobs[jobId] = {
+    const existing = data.jobs[jobId];
+    const record: StoredJob = {
+      ...existing,
       jobId,
       state,
-      reportId,
+      reportId: reportId ?? existing?.reportId,
       updatedAt: new Date().toISOString(),
     };
+    data.jobs[jobId] = record;
     await this.save(data);
+    return record;
+  }
+
+  async recordReport(
+    jobId: string,
+    state: "COMPLETED" | "FAILED" | "CANCELLED",
+    reportText: string,
+    reportId?: string,
+  ): Promise<StoredJob> {
+    if (!reportText.trim()) {
+      throw new Error("Persisted job report text must not be empty.");
+    }
+
+    const data = await this.load();
+    const existing = data.jobs[jobId];
+    const record: StoredJob = {
+      ...existing,
+      jobId,
+      state,
+      reportId: reportId ?? existing?.reportId,
+      reportText,
+      reportDeliveredAt: undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    data.jobs[jobId] = record;
+    await this.save(data);
+    return record;
+  }
+
+  async markReportDelivered(jobId: string): Promise<StoredJob> {
+    const data = await this.load();
+    const existing = data.jobs[jobId];
+
+    if (!existing) {
+      throw new Error(`Stored job '${jobId}' was not found.`);
+    }
+    if (!existing.reportText) {
+      throw new Error(`Stored job '${jobId}' has no persisted report.`);
+    }
+
+    const record: StoredJob = {
+      ...existing,
+      reportDeliveredAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    data.jobs[jobId] = record;
+    await this.save(data);
+    return record;
+  }
+
+  async markInterrupted(jobId: string): Promise<StoredJob> {
+    return this.set(jobId, "INTERRUPTED");
   }
 
   private async load(): Promise<JobStoreData> {
@@ -58,8 +138,12 @@ export class PersistentJobStore {
       return {
         jobs: parsed.jobs && typeof parsed.jobs === "object" ? parsed.jobs : {},
       };
-    } catch {
-      return { jobs: {} };
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        return { jobs: {} };
+      }
+      throw error;
     }
   }
 
@@ -67,7 +151,6 @@ export class PersistentJobStore {
     await mkdir(dirname(this.filePath), { recursive: true });
     const tempPath = this.filePath + ".tmp";
     await writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-    const { rename } = await import("node:fs/promises");
     await rename(tempPath, this.filePath);
   }
 }

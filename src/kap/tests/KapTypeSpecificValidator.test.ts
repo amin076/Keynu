@@ -56,10 +56,26 @@ const validAck = validateKapEnvelope({
   payload: {
     projectId: "keynu",
     missionId: "knowledge-graph-engine",
+    acknowledgedBootstrapId: "bootstrap-validator-test",
+    acknowledgedMemoryRevision: "memory-revision-validator-test",
     status: "ACCEPTED",
   },
 });
 assert.equal(validAck.valid, true);
+
+const staleStyleAck = validateKapEnvelope({
+  protocol: "KAP",
+  version: "1.0",
+  type: "MISSION_ACK",
+  id: "mission-ack-stale-style",
+  createdAt,
+  payload: {
+    projectId: "keynu",
+    missionId: "knowledge-graph-engine",
+    status: "ACCEPTED",
+  },
+});
+assert.equal(staleStyleAck.valid, false);
 
 const invalidAck = validateKapEnvelope({
   protocol: "KAP",

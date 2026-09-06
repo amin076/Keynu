@@ -43,6 +43,7 @@ const BaseEnvelopeShape = {
   protocol: z.literal("KAP"),
   version: z.literal("1.0"),
   id: NonEmptyString,
+  // Kept optional for KAP 1.0 compatibility. Mission/bootstrap emitters always include it.
   createdAt: z.iso.datetime({ offset: true }).optional(),
   metadata: KapEnvelopeMetadataSchema.optional(),
 };
@@ -95,6 +96,8 @@ export const KapMissionAckSchema = z.object({
     .object({
       projectId: NonEmptyString,
       missionId: NonEmptyString,
+      acknowledgedBootstrapId: NonEmptyString,
+      acknowledgedMemoryRevision: NonEmptyString,
       status: z.enum(["ACCEPTED", "REJECTED"]),
       understoodMilestone: NonEmptyString.optional(),
       message: z.string().optional(),

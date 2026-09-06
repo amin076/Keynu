@@ -63,6 +63,8 @@ const missionAck = await runtime.execute(createProviderResponse({
       payload: {
         projectId: 'keynu',
         missionId: 'openai-build-week',
+        acknowledgedBootstrapId: 'bootstrap-runtime-test',
+        acknowledgedMemoryRevision: 'memory-revision-runtime-test',
         status: 'ACCEPTED',
       },
     }),

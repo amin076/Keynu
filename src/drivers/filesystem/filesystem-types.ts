@@ -11,8 +11,14 @@ export type FileSystemRequest = {
   content?: string;
 };
 
+export type FileSystemResultData = {
+  content?: string;
+  entries?: string[];
+  exists?: boolean;
+};
+
 export type FileSystemResult = {
   summary: string;
-  data?: unknown;
+  data?: FileSystemResultData;
   changed?: string[];
 };
