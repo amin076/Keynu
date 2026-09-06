@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit:
@@ -131,3 +131,16 @@ jobs:
           }
           console.log('Security remediation verified: npm audit reports zero vulnerabilities.');
           NODE
+
+      - name: Commit verified lockfile remediation
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already remediated."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "fix: remediate npm transitive vulnerabilities"
+          git push origin HEAD:${GITHUB_REF_NAME}
