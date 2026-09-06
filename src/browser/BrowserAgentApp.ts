@@ -14,6 +14,7 @@ import { decideMissionBootstrap } from "./MissionBootstrapPolicy.js";
 
 export type BrowserAgentAppConfig = {
   conversationUrl: string;
+  skipMissionBootstrap?: boolean;
 };
 
 export class BrowserAgentApp {
@@ -22,20 +23,30 @@ export class BrowserAgentApp {
   async start(): Promise<void> {
     const sessionStore = new SessionStore();
     const previousSession = sessionStore.read();
+    const skipMissionBootstrap = this.config.skipMissionBootstrap === true;
+    const bootstrapDecision = skipMissionBootstrap
+      ? {
+          isSameConversation: previousSession.conversationUrl === this.config.conversationUrl,
+          bootstrapPending: false,
+          shouldRestoreMission: false,
+        }
+      : decideMissionBootstrap(
+          previousSession,
+          this.config.conversationUrl,
+        );
     const {
       isSameConversation,
       bootstrapPending,
       shouldRestoreMission,
-    } = decideMissionBootstrap(
-      previousSession,
-      this.config.conversationUrl,
-    );
+    } = bootstrapDecision;
 
     sessionStore.patch({
       conversationUrl: this.config.conversationUrl,
-      memoryRestored: isSameConversation
+      memoryRestored: skipMissionBootstrap
         ? previousSession.memoryRestored
-        : false,
+        : isSameConversation
+          ? previousSession.memoryRestored
+          : false,
       runtimeState: "starting",
     });
 
@@ -63,7 +74,9 @@ export class BrowserAgentApp {
 
     await agent.seedWatcherBaseline();
 
-    if (shouldRestoreMission) {
+    if (skipMissionBootstrap) {
+      console.log("[agent] Dashboard-managed mode: mission bootstrap disabled.");
+    } else if (shouldRestoreMission) {
       await this.sendMissionBootstrap(
         browser,
         sessionStore,

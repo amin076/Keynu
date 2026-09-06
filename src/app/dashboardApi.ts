@@ -1,4 +1,5 @@
 ﻿import type { IncomingMessage, ServerResponse } from "node:http";
+import { dashboardBrowserController } from "../browser/DashboardBrowserController.js";
 
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, {
@@ -6,6 +7,18 @@ function sendJson(response: ServerResponse, statusCode: number, body: unknown): 
     "cache-control": "no-store",
   });
   response.end(JSON.stringify(body, null, 2));
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  if (chunks.length === 0) return {};
+  const text = Buffer.concat(chunks).toString("utf8").trim();
+  if (!text) return {};
+  const parsed = JSON.parse(text) as unknown;
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
 }
 
 export type DashboardMemorySummary = {
@@ -110,11 +123,47 @@ export async function handleDashboardApi(
   }
 
   if (request.method === "GET" && url.pathname === "/api/browser/status") {
-    sendJson(response, 200, {
-      ok: true,
-      browser: "managed-by-keynu-browser-agent",
-      remoteDebuggingPort: 9222,
-    });
+    const status = await dashboardBrowserController.getStatus();
+    sendJson(response, 200, { ok: true, ...status, time: new Date().toISOString() });
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/browser/start") {
+    try {
+      const status = await dashboardBrowserController.startBrowser();
+      sendJson(response, 200, { ok: true, ...status, time: new Date().toISOString() });
+    } catch (error) {
+      sendJson(response, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/browser/pages") {
+    try {
+      const pages = await dashboardBrowserController.listPages();
+      sendJson(response, 200, { ok: true, count: pages.length, pages, time: new Date().toISOString() });
+    } catch (error) {
+      sendJson(response, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/browser/connect") {
+    try {
+      const body = await readJsonBody(request);
+      const pageId = typeof body.id === "string" ? body.id : undefined;
+      const pageUrl = typeof body.url === "string" ? body.url : undefined;
+      const status = await dashboardBrowserController.connectPage({ id: pageId, url: pageUrl });
+      sendJson(response, 200, { ok: true, ...status, time: new Date().toISOString() });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/browser/disconnect") {
+    const status = await dashboardBrowserController.disconnectPage();
+    sendJson(response, 200, { ok: true, ...status, time: new Date().toISOString() });
     return true;
   }
 

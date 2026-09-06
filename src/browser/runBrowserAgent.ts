@@ -11,7 +11,8 @@ if (!conversationUrl) {
   process.exit(1);
 }
 
-
-
-const app = new BrowserAgentApp({ conversationUrl });
+const app = new BrowserAgentApp({
+  conversationUrl,
+  skipMissionBootstrap: process.env.KEYNU_DASHBOARD_MANAGED === "1",
+});
 await app.start();
