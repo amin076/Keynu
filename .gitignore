@@ -43,6 +43,16 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+# Generated TypeScript artifacts belong under dist/, never beside src/*.ts
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map
+
+# Local smoke-test scratch files
+/keynu-*-test.txt
+/keynu-reconnect-health-check.txt
+/new-job-test.txt
 
 # Logs
 *.log
@@ -50,6 +60,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
 # Archives
 *.zip
 *.7z
