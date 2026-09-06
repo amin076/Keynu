@@ -2,6 +2,8 @@
 
 Status: active implementation audit
 
+> **Continuation architecture note — 2026-09-07:** This document records a point-in-time source audit. The continuation-specific statements below must now be read together with the accepted `docs/adr/ADR-0012-CONTINUATION-RUNTIME-UNIFICATION.md`. In particular, the earlier description of `WorkflowContinuationService` as part of active browser continuation wiring is superseded: the active continuation authority is the mission runtime centered on `BrowserContinuationCoordinator` and persistent mission/job stores; `src/workflow` continuation is a legacy compatibility boundary.
+
 This is a source-driven audit of the current Keynu repository. It separates implemented behavior from historical/aspirational documentation and prepares Keynu to act as a persistent software-development and research runtime for Melakat and other projects.
 
 ## Audit goals
