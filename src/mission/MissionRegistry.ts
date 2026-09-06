@@ -15,6 +15,11 @@ function readJsonFile<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, "")) as T;
 }
 
+function projectRootEnvironmentKey(projectId: string): string {
+  const normalized = projectId.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return `KEYNU_PROJECT_ROOT_${normalized}`;
+}
+
 export class MissionRegistry {
   private readonly localRegistryPath: string;
   private readonly repositoryRegistryPath: string;
@@ -58,9 +63,7 @@ export class MissionRegistry {
   getProjects(): MissionProject[] {
     return this.loadRegistry().projects.map((project) => ({
       ...project,
-      root: isAbsolute(project.root)
-        ? resolve(project.root)
-        : resolve(this.repositoryRoot, project.root),
+      root: this.resolveProjectRoot(project),
     }));
   }
 
@@ -125,6 +128,16 @@ export class MissionRegistry {
       project,
       mission: this.loadMission(project.id, project.activeMissionId),
     };
+  }
+
+  private resolveProjectRoot(project: MissionProject): string {
+    const environmentKey = projectRootEnvironmentKey(project.id);
+    const environmentRoot = process.env[environmentKey]?.trim();
+    const configuredRoot = environmentRoot || project.root;
+
+    return isAbsolute(configuredRoot)
+      ? resolve(configuredRoot)
+      : resolve(this.repositoryRoot, configuredRoot);
   }
 
   private selectExistingPath(paths: string[]): string | undefined {

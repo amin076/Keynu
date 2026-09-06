@@ -1,0 +1,97 @@
+{
+  "id": "melakat-development",
+  "projectId": "melakat",
+  "title": "Melakat Autonomous Development and Research",
+  "goal": "Use Keynu to continuously develop, test, verify, and run research experiments for Melakat while preserving Melakat's scientific contracts, reproducibility, and repository evidence as the domain source of truth.",
+  "status": "ACTIVE",
+  "currentMilestone": "Integrate Melakat experiment and repository semantics with Keynu and prove a resumable end-to-end mission",
+  "completedMilestones": [
+    "Melakat Phase Two completed with versioned world, spatial ecology, local resources, movement/sensing primitives, evidence gate, and desktop UI",
+    "Melakat Automated Experiment System v1 added for multi-condition, multi-seed headless campaigns",
+    "Completed a 90-run local-resource energy sweep with deterministic validation and scientific artifacts",
+    "Keynu Engineering Runtime v1 established as the shared software-engineering layer for project integrations",
+    "Registered Melakat as a Keynu mission project with a portable KEYNU_PROJECT_ROOT_MELAKAT override"
+  ],
+  "nextMilestones": [
+    "Implement MelakatDriver domain actions using Engineering Runtime rather than duplicated OS/IO/Git tooling",
+    "Validate Melakat experiment specifications and execute controlled headless campaigns through Keynu",
+    "Parse Melakat campaign, validation, summary, and comparison artifacts into KAP evidence",
+    "Create anomaly and extinction discovery actions that identify runs requiring human/GUI inspection",
+    "Prove Keynu can resume a Melakat mission after restart without repeating completed side effects",
+    "Use the integration to continue Phase Three research and development"
+  ],
+  "rules": [
+    "Melakat repository code, world contracts, experiment specifications, tests, and scientific artifacts remain the source of truth for Melakat.",
+    "Do not move scientific truth into Keynu mission memory; Keynu stores orchestration state and references to evidence.",
+    "Use Keynu Engineering Runtime for filesystem, command, script, Git, build, test, and verification work.",
+    "MelakatDriver must contain only Melakat-specific semantics and artifact interpretation.",
+    "Preserve the completed Phase One homogeneous baseline and Phase Two evidence contracts when developing later mechanisms.",
+    "Use controlled comparisons, multiple seeds, reproducibility checks, and invariant validation for scientific claims.",
+    "Do not claim cooperation, competition, adaptation, navigation, or selection beyond what the evidence causally supports.",
+    "Prefer headless experiment campaigns for batch science and use the desktop GUI for observation, inspection, and reproduction of interesting runs.",
+    "Do not silently alter ancestor genomes or experimental rules merely to produce visually interesting behavior.",
+    "Continue through safe verified development steps autonomously; request human input only for real scientific decisions, permissions, destructive actions, or ambiguous goals."
+  ],
+  "updatedAt": "2026-09-06T00:00:00.000Z",
+  "architectureDecisions": [
+    {
+      "title": "Headless runner is the batch-science interface",
+      "summary": "Keynu should invoke Melakat's automated experiment system for sweeps and campaigns; the desktop GUI remains an observation and inspection tool."
+    },
+    {
+      "title": "MelakatDriver is domain-specific",
+      "summary": "The driver validates/runs Melakat experiments and interprets Melakat artifacts while generic repository operations stay in Keynu Engineering Runtime."
+    },
+    {
+      "title": "Evidence remains in Melakat",
+      "summary": "Keynu may reference and summarize campaign artifacts, but reproducible scientific outputs remain archived by the Melakat repository and its workflows."
+    },
+    {
+      "title": "Project roots are portable",
+      "summary": "The default sibling root is '../melakat', while KEYNU_PROJECT_ROOT_MELAKAT can explicitly override it on machines with another repository layout."
+    }
+  ],
+  "recommendedReading": [
+    {
+      "title": "Keynu Engineering Runtime v1",
+      "path": "docs/ARCHITECTURE/ENGINEERING_RUNTIME_V1.md",
+      "reason": "Defines the generic capabilities that MelakatDriver must reuse rather than duplicate.",
+      "priority": 1
+    },
+    {
+      "title": "Melakat integration foundation",
+      "path": "docs/INTEGRATIONS/MELAKAT.md",
+      "reason": "Defines the current project-root, CLI, artifact, and driver boundary for the Melakat integration.",
+      "priority": 2
+    },
+    {
+      "title": "Keynu runtime readiness audit",
+      "path": "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
+      "reason": "Explains the runtime reliability work required before autonomous Melakat development.",
+      "priority": 3
+    }
+  ],
+  "knownLimitations": [
+    "The default sibling project root '../melakat' is only a fallback; nonstandard layouts must set KEYNU_PROJECT_ROOT_MELAKAT before starting the mission runtime.",
+    "MelakatDriver is not yet implemented.",
+    "Keynu has not yet completed an end-to-end restart/resume test against Melakat.",
+    "Scientific interpretation still requires cautious causal analysis even when campaigns are automated."
+  ],
+  "nextActions": [
+    {
+      "priority": 1,
+      "title": "Implement and test MelakatDriver",
+      "reason": "The real Melakat CLI and artifact contracts have now been inspected and documented."
+    },
+    {
+      "priority": 2,
+      "title": "Run a small verified Melakat campaign through Keynu",
+      "reason": "A real campaign proves command execution, artifact parsing, verification, and continuation end to end."
+    },
+    {
+      "priority": 3,
+      "title": "Prove restart/resume against Melakat",
+      "reason": "The integration must continue from persisted mission/report state without repeating completed side effects."
+    }
+  ]
+}
