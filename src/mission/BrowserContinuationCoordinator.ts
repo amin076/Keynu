@@ -106,10 +106,19 @@ export class BrowserContinuationCoordinator {
     const reportStatus = normalizeStatus(context.reportStatus);
     const completed = reportStatus === 'COMPLETED';
     const previous = this.continuationStore.read(context.missionId);
+    const replayingSameJob = previous?.jobId === context.jobId;
     const priorAutonomousStepCount =
-      context.autonomousStepCount ?? previous?.autonomousStepCount ?? 0;
+      context.autonomousStepCount ??
+      (replayingSameJob
+        ? Math.max(0, (previous?.autonomousStepCount ?? 0) - 1)
+        : previous?.autonomousStepCount) ??
+      0;
     const priorConsecutiveFailureCount =
-      context.consecutiveFailureCount ?? previous?.consecutiveFailureCount ?? 0;
+      context.consecutiveFailureCount ??
+      (replayingSameJob
+        ? Math.max(0, (previous?.consecutiveFailureCount ?? 0) - (completed ? 0 : 1))
+        : previous?.consecutiveFailureCount) ??
+      0;
 
     const continuation: ContinuationContract = completed
       ? {
@@ -132,10 +141,14 @@ export class BrowserContinuationCoordinator {
           retryable: true,
         };
 
-    const autonomousStepCount = priorAutonomousStepCount + 1;
-    const consecutiveFailureCount = completed
-      ? 0
-      : priorConsecutiveFailureCount + 1;
+    const autonomousStepCount = replayingSameJob
+      ? previous?.autonomousStepCount ?? priorAutonomousStepCount + 1
+      : priorAutonomousStepCount + 1;
+    const consecutiveFailureCount = replayingSameJob
+      ? previous?.consecutiveFailureCount ?? (completed ? 0 : priorConsecutiveFailureCount + 1)
+      : completed
+        ? 0
+        : priorConsecutiveFailureCount + 1;
 
     const persisted = this.continuationStore.record(
       context.missionId,
