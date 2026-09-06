@@ -11,10 +11,10 @@ cpSync(join(process.cwd(), "config", "missions"), join(root, "config", "missions
 try {
   const selection = new MissionRegistry(root).getActiveMission();
   assert.equal(selection.project.id, "keynu");
-  assert.equal(selection.mission.id, "openai-build-week");
+  assert.equal(selection.mission.id, "runtime-readiness-melakat");
   assert.equal(
     selection.mission.currentMilestone,
-    "Define the winning submission concept and minimum competition-ready demo",
+    "Complete runtime cleanup and establish the Melakat domain integration on the shared Engineering Runtime",
   );
   assert(selection.mission.nextActions?.length);
 
