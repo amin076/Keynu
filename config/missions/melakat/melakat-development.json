@@ -9,7 +9,8 @@
     "Melakat Phase Two completed with versioned world, spatial ecology, local resources, movement/sensing primitives, evidence gate, and desktop UI",
     "Melakat Automated Experiment System v1 added for multi-condition, multi-seed headless campaigns",
     "Completed a 90-run local-resource energy sweep with deterministic validation and scientific artifacts",
-    "Keynu Engineering Runtime v1 established as the shared software-engineering layer for project integrations"
+    "Keynu Engineering Runtime v1 established as the shared software-engineering layer for project integrations",
+    "Registered Melakat as a Keynu mission project with a portable KEYNU_PROJECT_ROOT_MELAKAT override"
   ],
   "nextMilestones": [
     "Implement MelakatDriver domain actions using Engineering Runtime rather than duplicated OS/IO/Git tooling",
@@ -44,6 +45,10 @@
     {
       "title": "Evidence remains in Melakat",
       "summary": "Keynu may reference and summarize campaign artifacts, but reproducible scientific outputs remain archived by the Melakat repository and its workflows."
+    },
+    {
+      "title": "Project roots are portable",
+      "summary": "The default sibling root is '../melakat', while KEYNU_PROJECT_ROOT_MELAKAT can explicitly override it on machines with another repository layout."
     }
   ],
   "recommendedReading": [
@@ -54,14 +59,20 @@
       "priority": 1
     },
     {
+      "title": "Melakat integration foundation",
+      "path": "docs/INTEGRATIONS/MELAKAT.md",
+      "reason": "Defines the current project-root, CLI, artifact, and driver boundary for the Melakat integration.",
+      "priority": 2
+    },
+    {
       "title": "Keynu runtime readiness audit",
       "path": "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
       "reason": "Explains the runtime reliability work required before autonomous Melakat development.",
-      "priority": 2
+      "priority": 3
     }
   ],
   "knownLimitations": [
-    "The default sibling project root '../melakat' assumes the standard C:/Physics/Keynu and C:/Physics/melakat local layout; deployments may need an override mechanism.",
+    "The default sibling project root '../melakat' is only a fallback; nonstandard layouts must set KEYNU_PROJECT_ROOT_MELAKAT before starting the mission runtime.",
     "MelakatDriver is not yet implemented.",
     "Keynu has not yet completed an end-to-end restart/resume test against Melakat.",
     "Scientific interpretation still requires cautious causal analysis even when campaigns are automated."
@@ -69,18 +80,18 @@
   "nextActions": [
     {
       "priority": 1,
-      "title": "Inspect the current Melakat experiment CLI and artifact contracts",
-      "reason": "Driver actions must match the real Melakat command and output schemas rather than assumptions."
+      "title": "Implement and test MelakatDriver",
+      "reason": "The real Melakat CLI and artifact contracts have now been inspected and documented."
     },
     {
       "priority": 2,
-      "title": "Implement and test MelakatDriver",
-      "reason": "The driver is the domain bridge between Keynu missions and Melakat's existing headless research system."
+      "title": "Run a small verified Melakat campaign through Keynu",
+      "reason": "A real campaign proves command execution, artifact parsing, verification, and continuation end to end."
     },
     {
       "priority": 3,
-      "title": "Run a small verified Melakat campaign through Keynu",
-      "reason": "A real campaign proves command execution, artifact parsing, verification, and continuation end to end."
+      "title": "Prove restart/resume against Melakat",
+      "reason": "The integration must continue from persisted mission/report state without repeating completed side effects."
     }
   ]
 }
