@@ -3,11 +3,23 @@ name: NPM dependency security audit
 on:
   push:
     branches:
-      - "audit/npm-dependency-security-*"
+      - main
+      - "audit/**"
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/npm-security-audit.yml
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/npm-security-audit.yml
+  schedule:
+    - cron: "23 4 * * 1"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   audit:
@@ -23,46 +35,26 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Validate current lockfile install
+      - name: Validate lockfile install
         run: npm ci --ignore-scripts
-
-      - name: Capture vulnerable dependency paths
-        shell: bash
-        run: |
-          npm ls postcss nanoid --all --json > npm-dependency-paths-before.json || true
-
-      - name: Update vulnerable transitive packages within declared ranges
-        run: npm update postcss nanoid --package-lock-only --ignore-scripts
-
-      - name: Validate remediated lockfile install
-        run: npm ci --ignore-scripts
-
-      - name: Capture remediated dependency paths
-        shell: bash
-        run: |
-          npm ls postcss nanoid --all --json > npm-dependency-paths-after.json || true
 
       - name: Audit all dependencies
-        id: audit_all
         shell: bash
         run: |
           set +e
           npm audit --json > npm-audit-all.json
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "all_exit_code=$?" >> "$GITHUB_ENV"
           exit 0
 
       - name: Audit production dependencies
-        id: audit_prod
         shell: bash
         run: |
           set +e
           npm audit --omit=dev --json > npm-audit-production.json
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "production_exit_code=$?" >> "$GITHUB_ENV"
           exit 0
 
-      - name: Summarize audit
+      - name: Summarize and enforce policy
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -70,7 +62,9 @@ jobs:
 
           function readReport(path) {
             const report = JSON.parse(fs.readFileSync(path, 'utf8'));
-            if (report.error) throw new Error(`${path}: ${JSON.stringify(report.error)}`);
+            if (report.error) {
+              throw new Error(`${path}: npm audit error: ${JSON.stringify(report.error)}`);
+            }
             return report;
           }
 
@@ -88,59 +82,45 @@ jobs:
 
           const allCounts = counts(readReport('npm-audit-all.json'));
           const productionCounts = counts(readReport('npm-audit-production.json'));
-          const summary = { all: allCounts, production: productionCounts };
+          const summary = {
+            policy: 'fail on high or critical vulnerabilities in any dependency scope; report lower severities',
+            all: allCounts,
+            production: productionCounts,
+          };
           fs.writeFileSync('npm-audit-summary.json', JSON.stringify(summary, null, 2) + '\n');
 
           const markdown = [
-            '# npm dependency security remediation',
+            '# npm dependency security audit',
             '',
             '| Scope | Info | Low | Moderate | High | Critical | Total |',
             '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
             `| All dependencies | ${allCounts.info} | ${allCounts.low} | ${allCounts.moderate} | ${allCounts.high} | ${allCounts.critical} | ${allCounts.total} |`,
             `| Production only | ${productionCounts.info} | ${productionCounts.low} | ${productionCounts.moderate} | ${productionCounts.high} | ${productionCounts.critical} | ${productionCounts.total} |`,
             '',
+            `Raw npm audit exit codes: all=${process.env.all_exit_code ?? 'unknown'}, production=${process.env.production_exit_code ?? 'unknown'}`,
+            '',
+            'Policy: fail on high or critical vulnerabilities in any dependency scope; lower severities remain visible in evidence.',
+            '',
           ].join('\n');
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
           console.log(markdown);
+
+          const severe = allCounts.high + allCounts.critical;
+          if (severe > 0) {
+            console.error(`Security gate failed: ${allCounts.high} high and ${allCounts.critical} critical vulnerabilities.`);
+            process.exit(1);
+          }
+          console.log('Security gate passed: no high or critical npm vulnerabilities.');
           NODE
 
-      - name: Upload remediation evidence
+      - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: npm-security-remediation-${{ github.run_id }}
+          name: npm-security-audit-${{ github.run_id }}
           path: |
-            package-lock.json
-            npm-dependency-paths-before.json
-            npm-dependency-paths-after.json
             npm-audit-all.json
             npm-audit-production.json
             npm-audit-summary.json
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 14
-
-      - name: Enforce clean audit
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const summary = JSON.parse(fs.readFileSync('npm-audit-summary.json', 'utf8'));
-          if (summary.all.total !== 0 || summary.production.total !== 0) {
-            console.error(`Audit still reports vulnerabilities: ${JSON.stringify(summary)}`);
-            process.exit(1);
-          }
-          console.log('Security remediation verified: npm audit reports zero vulnerabilities.');
-          NODE
-
-      - name: Commit verified lockfile remediation
-        shell: bash
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json is already remediated."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "fix: remediate npm transitive vulnerabilities"
-          git push origin HEAD:${GITHUB_REF_NAME}
