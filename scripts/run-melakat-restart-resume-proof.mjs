@@ -187,7 +187,9 @@ try {
   });
   assert.equal(evidenceResult.success, true);
   const evidenceData = evidenceResult.data || {};
-  assert.equal(evidenceData.validationPassed, true);
+  const compactEvidence = evidenceData.evidence || {};
+  const validationEvidence = compactEvidence.validation || {};
+  assert.equal(validationEvidence.passed, true);
 
   const evidenceReport =
     "```kap\n" +
@@ -256,6 +258,8 @@ try {
   assert.equal(persistedContinuation.jobId, runJobId);
   assert.equal(persistedContinuation.autonomousStepCount, 1);
 
+  const reproducibility = validationEvidence.reproducibility || {};
+  const checksums = compactEvidence.checksums || {};
   const proof = {
     kind: "keynu-melakat-restart-resume-proof",
     scientificClaim: false,
@@ -280,10 +284,10 @@ try {
     duplicateContinuationMessageCount: duplicateContinuationMessages.length,
     distinctNextAction: "melakat.evidenceSummary",
     distinctNextActionSucceeded: evidenceResult.success,
-    validationPassed: evidenceData.validationPassed === true,
-    failureCount: evidenceData.failureCount ?? null,
-    reproducibilityIdentical: evidenceData.reproducibilityIdentical ?? null,
-    evidenceChecksumCount: evidenceData.evidenceChecksumCount ?? null,
+    validationPassed: validationEvidence.passed === true,
+    failureCount: validationEvidence.failureCount ?? null,
+    reproducibilityIdentical: reproducibility.identical ?? null,
+    evidenceChecksumCount: Object.keys(checksums).length,
     persistedAutonomousStepCount: persistedContinuation.autonomousStepCount,
     originalJobState: finalRunRecord.state,
     evidenceJobState: finalEvidenceRecord.state,
