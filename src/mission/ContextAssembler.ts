@@ -1,3 +1,4 @@
+import { ActiveMissionResolver } from "./ActiveMissionResolver.js";
 import { MemoryLoader } from "./MemoryLoader.js";
 import { MissionRegistry } from "./MissionRegistry.js";
 import { MissionStateStore } from "./MissionStateStore.js";
@@ -8,19 +9,46 @@ import type {
 } from "./MissionTypes.js";
 
 export class ContextAssembler {
+  private readonly activeMissionResolver: ActiveMissionResolver;
+
   constructor(
     private readonly registry = new MissionRegistry(),
     private readonly stateStore = new MissionStateStore(),
-  ) {}
+    activeMissionResolver?: ActiveMissionResolver,
+  ) {
+    this.activeMissionResolver =
+      activeMissionResolver ??
+      new ActiveMissionResolver({ registry, stateStore });
+  }
 
   assemble(projectId?: string): MissionContext {
-    const { project, mission } = this.registry.getActiveMission(projectId);
+    const resolution = this.activeMissionResolver.resolve({ projectId });
+    if (resolution.action === "BLOCKED") {
+      throw new Error(
+        `Active mission resolution failed: ${resolution.diagnostics.join(" ")}`,
+      );
+    }
+
+    const project = this.registry.getProject(resolution.projectId);
+    const mission = this.registry.loadMission(
+      resolution.projectId,
+      resolution.missionId,
+    );
     const memoryLoader = new MemoryLoader(project.root);
     const projectInspector = new ProjectInspector(project.root);
     const memory = memoryLoader.loadAll();
     const repository = projectInspector.inspect();
     const runtimeState = this.stateStore.getMission(mission.id);
-    const warnings = this.collectWarnings(memory, repository.branch, runtimeState?.currentMilestone, mission.currentMilestone);
+    const warnings = this.collectWarnings(
+      memory,
+      repository.branch,
+      runtimeState?.currentMilestone,
+      mission.currentMilestone,
+    );
+
+    if (resolution.requiresBootstrap) {
+      warnings.push(...resolution.diagnostics);
+    }
 
     return {
       project,

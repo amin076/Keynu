@@ -1,3 +1,4 @@
+import { ActiveMissionResolver } from "./ActiveMissionResolver.js";
 import { BootstrapBuilder } from "./BootstrapBuilder.js";
 import { ContextAssembler } from "./ContextAssembler.js";
 import { ContextBudgeter } from "./ContextBudgeter.js";
@@ -47,10 +48,24 @@ export class MissionManager {
       validator,
       stateStore,
     ),
+    private readonly activeMissionResolver = new ActiveMissionResolver({
+      registry,
+      stateStore,
+    }),
   ) {}
 
   prepare(options: PrepareMissionOptions = {}): MissionBootstrapPayload {
-    const selection = this.registry.getActiveMission(options.projectId);
+    const reconciled = this.activeMissionResolver.reconcile({
+      projectId: options.projectId,
+    });
+
+    if (reconciled.resolution.action === "BLOCKED") {
+      throw new Error(
+        `Active mission resolution failed: ${reconciled.resolution.diagnostics.join(" ")}`,
+      );
+    }
+
+    const selection = this.getResolvedSelection(options.projectId);
 
     this.stateStore.setActiveMission(
       selection.project.id,
@@ -125,7 +140,7 @@ export class MissionManager {
       status,
       understoodMilestone,
     } = acknowledgement.payload;
-    const selection = this.registry.getActiveMission(projectId);
+    const selection = this.getResolvedSelection(projectId);
     const runtimeState = this.stateStore.getMission(missionId);
 
     if (!runtimeState) {
@@ -167,22 +182,39 @@ export class MissionManager {
   }
 
   recordJob(jobId: string, projectId?: string): MissionRuntimeState {
-    const selection = this.registry.getActiveMission(projectId);
+    const selection = this.getResolvedSelection(projectId);
     return this.stateStore.recordJob(selection.mission.id, jobId);
   }
 
   pause(projectId?: string): MissionRuntimeState {
-    const selection = this.registry.getActiveMission(projectId);
+    const selection = this.getResolvedSelection(projectId);
     return this.stateStore.setStatus(selection.mission.id, "PAUSED");
   }
 
   resume(projectId?: string): MissionRuntimeState {
-    const selection = this.registry.getActiveMission(projectId);
+    const selection = this.getResolvedSelection(projectId);
     return this.stateStore.setStatus(selection.mission.id, "ACTIVE");
   }
 
   complete(projectId?: string): MissionRuntimeState {
-    const selection = this.registry.getActiveMission(projectId);
+    const selection = this.getResolvedSelection(projectId);
     return this.stateStore.setStatus(selection.mission.id, "COMPLETED");
+  }
+
+  private getResolvedSelection(projectId?: string) {
+    const resolution = this.activeMissionResolver.resolve({ projectId });
+    if (resolution.action === "BLOCKED") {
+      throw new Error(
+        `Active mission resolution failed: ${resolution.diagnostics.join(" ")}`,
+      );
+    }
+
+    return {
+      project: this.registry.getProject(resolution.projectId),
+      mission: this.registry.loadMission(
+        resolution.projectId,
+        resolution.missionId,
+      ),
+    };
   }
 }
