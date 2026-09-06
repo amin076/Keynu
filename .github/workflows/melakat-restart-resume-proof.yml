@@ -1,0 +1,77 @@
+name: Melakat restart-resume proof
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/melakat-restart-resume-proof"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restart-resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Keynu
+        uses: actions/checkout@v4
+        with:
+          path: keynu
+
+      - name: Check out Melakat
+        uses: actions/checkout@v4
+        with:
+          repository: amin076/melakat
+          ref: main
+          path: melakat
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: keynu/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Keynu dependencies
+        working-directory: keynu
+        run: npm ci
+
+      - name: Build Keynu
+        working-directory: keynu
+        run: npm run build
+
+      - name: Install Melakat experiment CLI
+        run: python -m pip install --no-deps -e melakat/desktop
+
+      - name: Run restart-resume proof
+        working-directory: keynu
+        shell: bash
+        env:
+          MELAKAT_RESTART_PROJECT_ROOT: ../melakat
+          MELAKAT_RESTART_SPEC_PATH: experiments/phase-two/local-resource-energy-sweep.json
+          MELAKAT_RESTART_OUTPUT_DIR: results/keynu-restart-resume-proof
+          MELAKAT_RESTART_TICKS: "40"
+          MELAKAT_RESTART_SEED_COUNT: "1"
+          MELAKAT_RESTART_SEED_START: "1"
+        run: |
+          set -o pipefail
+          node scripts/run-melakat-restart-resume-proof.mjs | tee melakat-restart-resume-proof.log
+
+      - name: Upload restart-resume evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: melakat-restart-resume-proof-${{ github.run_id }}
+          path: |
+            keynu/melakat-restart-resume-proof.log
+            melakat/results/keynu-restart-resume-proof
+          if-no-files-found: ignore
+          retention-days: 14

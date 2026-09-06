@@ -4,7 +4,7 @@
   "title": "Keynu Runtime Readiness and Melakat Integration",
   "goal": "Harden Keynu into a persistent, resumable software-development and research runtime, then use that runtime to develop, test, and research Melakat without duplicating generic engineering capabilities in the Melakat integration.",
   "status": "ACTIVE",
-  "currentMilestone": "Complete runtime cleanup and establish the Melakat domain integration on the shared Engineering Runtime",
+  "currentMilestone": "Consolidate Keynu continuation architecture and runtime hygiene now that the shared Engineering Runtime and restart-safe Melakat integration are verified",
   "completedMilestones": [
     "Completed the September 2026 source-driven Keynu runtime audit",
     "Added comprehensive GitHub CI and clean-checkout validation",
@@ -13,15 +13,20 @@
     "Persisted autonomous continuation counters across restarts",
     "Added cross-platform filesystem containment and protected-memory enforcement",
     "Added the central Engineering Runtime v1 for shared project IO, commands, scripts, Git, and verification",
-    "Centralized MissionManager and ContextAssembler active-mission selection through ActiveMissionResolver"
+    "Centralized MissionManager and ContextAssembler active-mission selection through ActiveMissionResolver",
+    "Registered Melakat as a portable Keynu mission project and replaced the stale Build Week active mission",
+    "Implemented MelakatDriver v1 on top of Engineering Runtime without duplicating generic engineering tools",
+    "Verified real cross-repository Keynu-to-Melakat experiment execution and canonical evidence readback",
+    "Added Melakat evidence summary, observed-extinction discovery, and experimental-integrity discovery actions",
+    "Proved a completed real Melakat experiment job survives restart without side-effect replay",
+    "Proved undelivered REPORT recovery, persistent continuation duplicate suppression, and distinct next-step execution after restart"
   ],
   "nextMilestones": [
-    "Reconcile workflow continuation with the persistent mission continuation path",
-    "Remove only verified generated, backup, and historical runtime garbage without breaking compatibility contracts",
-    "Reconcile architecture and status documentation with the current runtime",
-    "Add Melakat as a Keynu project and implement a domain-specific MelakatDriver on top of Engineering Runtime",
-    "Create resumable Melakat development and research mission templates",
-    "Prove an end-to-end restart/resume Melakat mission with verified local actions and experiment evidence"
+    "Reconcile WorkflowContinuationService with the persistent BrowserContinuationCoordinator path and define one continuation source of truth",
+    "Remove only verified generated, backup, manual-test, and historical runtime garbage without breaking compatibility contracts",
+    "Reconcile architecture/status documentation with the verified September 2026 runtime",
+    "Audit and resolve the npm dependency vulnerabilities without unsafe blind upgrades",
+    "Exercise a longer multi-step resumable Melakat development/research mission and a local Windows integration proof"
   ],
   "rules": [
     "Keynu is a persistent mission runtime, not merely a collection of application drivers.",
@@ -35,9 +40,10 @@
     "Run the comprehensive Keynu validation suite before merging runtime changes.",
     "Prefer Node.js and native Node APIs for cross-platform engineering operations; use PowerShell where Windows-specific behavior requires it.",
     "Never overwrite protected Keynu repository memory through generic file operations.",
-    "Do not claim an autonomous or scientific result without matching runtime, test, or artifact evidence."
+    "Do not claim an autonomous or scientific result without matching runtime, test, or artifact evidence.",
+    "A green CI pipeline that pipes a verifier through tee must enable pipefail so verifier failures cannot be masked."
   ],
-  "updatedAt": "2026-09-06T00:00:00.000Z",
+  "updatedAt": "2026-09-06T18:04:00.000Z",
   "architectureDecisions": [
     {
       "title": "Engineering Runtime is shared infrastructure",
@@ -54,61 +60,77 @@
     {
       "title": "Persistence precedes autonomous continuation",
       "summary": "KAP job claims, reports, delivery status, mission state, and continuation counters must be recoverable before Keynu requests the next autonomous AI step."
+    },
+    {
+      "title": "Completed KAP side effects are not replayed",
+      "summary": "Persistent job identity and REPORT recovery take precedence after restart; a completed job is reported and continued rather than automatically executed again."
+    },
+    {
+      "title": "Continuation delivery is idempotent",
+      "summary": "Continuation request identity and delivery state survive coordinator recreation so the same completed job does not cause duplicate continuation prompts."
     }
   ],
   "recommendedReading": [
     {
+      "title": "Melakat restart/resume evidence",
+      "path": "docs/INTEGRATIONS/MELAKAT_RESTART_RESUME_EVIDENCE_2026-09-07.md",
+      "reason": "Records the strongest current real-domain proof of Keynu job/report persistence and continuation idempotency.",
+      "priority": 1
+    },
+    {
       "title": "September 2026 runtime readiness audit",
       "path": "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
-      "reason": "Tracks confirmed defects, architecture drift, cleanup candidates, and the staged readiness plan.",
-      "priority": 1
+      "reason": "Tracks confirmed defects, architecture drift, cleanup candidates, and remaining readiness work.",
+      "priority": 2
     },
     {
       "title": "Engineering Runtime v1",
       "path": "docs/ARCHITECTURE/ENGINEERING_RUNTIME_V1.md",
       "reason": "Defines the shared software-engineering capability boundary used by domain integrations.",
-      "priority": 2
-    },
-    {
-      "title": "KAP 1.0 specification",
-      "path": "docs/KAP/KAP_PROTOCOL_V1.md",
-      "reason": "Defines the structured protocol between AI reasoning and Keynu execution/reporting.",
       "priority": 3
     },
     {
       "title": "Mission Continuation Engine",
       "path": "docs/keynu-book/MISSION_CONTINUATION_ENGINE.md",
-      "reason": "Provides the intended persistent continuation behavior that the runtime must implement and verify.",
+      "reason": "Provides the intended persistent continuation behavior that now needs consolidation with the remaining workflow path.",
       "priority": 4
+    },
+    {
+      "title": "KAP 1.0 specification",
+      "path": "docs/KAP/KAP_PROTOCOL_V1.md",
+      "reason": "Defines the structured protocol between AI reasoning and Keynu execution/reporting.",
+      "priority": 5
     }
   ],
   "knownLimitations": [
     "A local .keynu mission registry can override repository mission configuration until it is synchronized on the user's machine.",
     "WorkflowContinuationService remains a separate legacy workflow path and is not yet fully reconciled with the persistent browser mission continuation path.",
     "Engineering Runtime v1 is project-scoped and guarded but is not a complete operating-system sandbox.",
+    "The restart/resume proof recreates persistent stores and continuation coordinators in CI rather than killing and relaunching a live BrowserAgent connected to a real browser session.",
+    "A KAP job interrupted while a side effect is RUNNING is intentionally not replayed automatically and still requires an AI recovery decision.",
     "Repository cleanup candidates still require reference checks before deletion.",
-    "MelakatDriver and the end-to-end Melakat mission have not yet been implemented."
+    "CI currently reports npm dependency vulnerabilities that still require package-level impact analysis."
   ],
   "nextActions": [
     {
       "priority": 1,
-      "title": "Reconcile workflow and mission continuation",
-      "reason": "Keynu should have one understandable continuation model instead of parallel workflow and browser paths."
+      "title": "Unify continuation runtime paths",
+      "reason": "Keynu now has strong persistence primitives, but WorkflowContinuationService and the persistent browser continuation path should not remain parallel sources of continuation semantics."
     },
     {
       "priority": 2,
       "title": "Perform verified repository hygiene cleanup",
-      "reason": "Generated and historical artifacts can create source ambiguity, but compatibility-sensitive paths must be checked before removal."
+      "reason": "Generated, backup, manual-test, and historical artifacts create source ambiguity but must be reference-checked before deletion."
     },
     {
       "priority": 3,
-      "title": "Implement MelakatDriver on Engineering Runtime",
-      "reason": "This is the first domain integration that should prove the central engineering-center architecture."
+      "title": "Audit npm vulnerabilities",
+      "reason": "CI repeatedly reports one moderate and one high vulnerability; identify the dependency chain and safe upgrade path before applying fixes."
     },
     {
       "priority": 4,
-      "title": "Run an autonomous Melakat development and research mission",
-      "reason": "The integration is only useful when Keynu can resume, execute, verify, and continue real Melakat work without repeated human continuation prompts."
+      "title": "Run a longer resumable Melakat mission",
+      "reason": "The real restart contract is now proven for a short campaign; a longer multi-step mission should validate the consolidated runtime."
     }
   ]
 }

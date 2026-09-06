@@ -4,21 +4,25 @@
   "title": "Melakat Autonomous Development and Research",
   "goal": "Use Keynu to continuously develop, test, verify, and run research experiments for Melakat while preserving Melakat's scientific contracts, reproducibility, and repository evidence as the domain source of truth.",
   "status": "ACTIVE",
-  "currentMilestone": "Integrate Melakat experiment and repository semantics with Keynu and prove a resumable end-to-end mission",
+  "currentMilestone": "Use the verified Keynu-Melakat integration for longer resumable development and research missions while Keynu consolidates its continuation runtime",
   "completedMilestones": [
     "Melakat Phase Two completed with versioned world, spatial ecology, local resources, movement/sensing primitives, evidence gate, and desktop UI",
     "Melakat Automated Experiment System v1 added for multi-condition, multi-seed headless campaigns",
     "Completed a 90-run local-resource energy sweep with deterministic validation and scientific artifacts",
     "Keynu Engineering Runtime v1 established as the shared software-engineering layer for project integrations",
-    "Registered Melakat as a Keynu mission project with a portable KEYNU_PROJECT_ROOT_MELAKAT override"
+    "Registered Melakat as a Keynu mission project with a portable KEYNU_PROJECT_ROOT_MELAKAT override",
+    "Implemented MelakatDriver v1 using the shared Engineering Runtime for generic IO and process execution",
+    "Verified a real cross-repository Keynu-to-Melakat campaign smoke with canonical artifact readback",
+    "Added compact evidence summary, observed-extinction discovery, and experimental-integrity discovery actions",
+    "Proved restart-safe recovery of a completed real Melakat experiment job without replaying the side effect",
+    "Proved persisted REPORT recovery, duplicate continuation suppression, and a distinct follow-up melakat.evidenceSummary job after restart"
   ],
   "nextMilestones": [
-    "Implement MelakatDriver domain actions using Engineering Runtime rather than duplicated OS/IO/Git tooling",
-    "Validate Melakat experiment specifications and execute controlled headless campaigns through Keynu",
-    "Parse Melakat campaign, validation, summary, and comparison artifacts into KAP evidence",
-    "Create anomaly and extinction discovery actions that identify runs requiring human/GUI inspection",
-    "Prove Keynu can resume a Melakat mission after restart without repeating completed side effects",
-    "Use the integration to continue Phase Three research and development"
+    "Reconcile Keynu WorkflowContinuationService with the persistent mission continuation path so Melakat missions use one continuation model",
+    "Run a longer resumable Melakat development/research mission through Keynu with multiple distinct verified steps",
+    "Exercise the integration on the local Windows repository layout as well as Linux CI",
+    "Use the hardened integration for controlled Phase Three development and research while preserving Phase One and Phase Two evidence contracts",
+    "Keep scientific interpretation grounded in Melakat artifacts and promote only reproducible evidence to project records"
   ],
   "rules": [
     "Melakat repository code, world contracts, experiment specifications, tests, and scientific artifacts remain the source of truth for Melakat.",
@@ -30,13 +34,14 @@
     "Do not claim cooperation, competition, adaptation, navigation, or selection beyond what the evidence causally supports.",
     "Prefer headless experiment campaigns for batch science and use the desktop GUI for observation, inspection, and reproduction of interesting runs.",
     "Do not silently alter ancestor genomes or experimental rules merely to produce visually interesting behavior.",
-    "Continue through safe verified development steps autonomously; request human input only for real scientific decisions, permissions, destructive actions, or ambiguous goals."
+    "Continue through safe verified development steps autonomously; request human input only for real scientific decisions, permissions, destructive actions, or ambiguous goals.",
+    "Never replay a completed side-effecting KAP job after restart; recover its persisted REPORT and choose a new distinct mission step instead."
   ],
-  "updatedAt": "2026-09-06T00:00:00.000Z",
+  "updatedAt": "2026-09-06T18:04:00.000Z",
   "architectureDecisions": [
     {
       "title": "Headless runner is the batch-science interface",
-      "summary": "Keynu should invoke Melakat's automated experiment system for sweeps and campaigns; the desktop GUI remains an observation and inspection tool."
+      "summary": "Keynu invokes Melakat's automated experiment system for sweeps and campaigns; the desktop GUI remains an observation and inspection tool."
     },
     {
       "title": "MelakatDriver is domain-specific",
@@ -49,49 +54,69 @@
     {
       "title": "Project roots are portable",
       "summary": "The default sibling root is '../melakat', while KEYNU_PROJECT_ROOT_MELAKAT can explicitly override it on machines with another repository layout."
+    },
+    {
+      "title": "Completed experiment jobs are restart-idempotent",
+      "summary": "A completed Melakat KAP job is recovered from persistent Keynu job/report state after restart and is not automatically executed again for the same job ID."
+    },
+    {
+      "title": "Continuation after completion must be distinct",
+      "summary": "After a recovered completed Melakat job, Keynu requests a new distinct mission step; duplicate continuation delivery is persistently suppressed."
     }
   ],
   "recommendedReading": [
     {
-      "title": "Keynu Engineering Runtime v1",
-      "path": "docs/ARCHITECTURE/ENGINEERING_RUNTIME_V1.md",
-      "reason": "Defines the generic capabilities that MelakatDriver must reuse rather than duplicate.",
+      "title": "Melakat restart/resume evidence",
+      "path": "docs/INTEGRATIONS/MELAKAT_RESTART_RESUME_EVIDENCE_2026-09-07.md",
+      "reason": "Records the real campaign restart-safety proof, REPORT recovery, continuation idempotency, and its limits.",
       "priority": 1
     },
     {
       "title": "Melakat integration foundation",
       "path": "docs/INTEGRATIONS/MELAKAT.md",
-      "reason": "Defines the current project-root, CLI, artifact, and driver boundary for the Melakat integration.",
+      "reason": "Defines the current project-root, CLI, artifact, driver, and evidence-discovery contract.",
       "priority": 2
+    },
+    {
+      "title": "Keynu Engineering Runtime v1",
+      "path": "docs/ARCHITECTURE/ENGINEERING_RUNTIME_V1.md",
+      "reason": "Defines the generic capabilities that MelakatDriver reuses rather than duplicates.",
+      "priority": 3
     },
     {
       "title": "Keynu runtime readiness audit",
       "path": "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
-      "reason": "Explains the runtime reliability work required before autonomous Melakat development.",
-      "priority": 3
+      "reason": "Explains the remaining continuation, cleanup, documentation, and runtime-hardening work.",
+      "priority": 4
     }
   ],
   "knownLimitations": [
     "The default sibling project root '../melakat' is only a fallback; nonstandard layouts must set KEYNU_PROJECT_ROOT_MELAKAT before starting the mission runtime.",
-    "MelakatDriver is not yet implemented.",
-    "Keynu has not yet completed an end-to-end restart/resume test against Melakat.",
-    "Scientific interpretation still requires cautious causal analysis even when campaigns are automated."
+    "The restart/resume proof recreates persistent stores and continuation coordinators in CI; it does not yet kill and relaunch a live BrowserAgent attached to a real ChatGPT browser session.",
+    "A job interrupted while its side effect is still RUNNING remains intentionally fail-safe and requires recovery reasoning rather than automatic replay.",
+    "WorkflowContinuationService remains a separate Keynu continuation path and still needs reconciliation with the persistent browser mission continuation model.",
+    "Scientific interpretation still requires cautious causal analysis even when campaigns and evidence discovery are automated."
   ],
   "nextActions": [
     {
       "priority": 1,
-      "title": "Implement and test MelakatDriver",
-      "reason": "The real Melakat CLI and artifact contracts have now been inspected and documented."
+      "title": "Reconcile Keynu continuation paths",
+      "reason": "Longer autonomous Melakat missions should rely on one persistent continuation and delivery model rather than parallel workflow/browser semantics."
     },
     {
       "priority": 2,
-      "title": "Run a small verified Melakat campaign through Keynu",
-      "reason": "A real campaign proves command execution, artifact parsing, verification, and continuation end to end."
+      "title": "Run a longer resumable Melakat mission",
+      "reason": "The restart-safety contract is proven for a real short campaign; the next integration proof should span multiple distinct development and research steps."
     },
     {
       "priority": 3,
-      "title": "Prove restart/resume against Melakat",
-      "reason": "The integration must continue from persisted mission/report state without repeating completed side effects."
+      "title": "Exercise the local Windows path",
+      "reason": "CI proves the Linux path; the standard C:\\Physics\\Keynu and C:\\Physics\\melakat layout should also be verified without changing scientific contracts."
+    },
+    {
+      "priority": 4,
+      "title": "Continue controlled Phase Three work",
+      "reason": "Use Keynu for later Melakat development only after the runtime consolidation step remains green and reproducible."
     }
   ]
 }

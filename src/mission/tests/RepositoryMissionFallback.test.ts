@@ -12,11 +12,10 @@ try {
   const selection = new MissionRegistry(root).getActiveMission();
   assert.equal(selection.project.id, "keynu");
   assert.equal(selection.mission.id, "runtime-readiness-melakat");
-  assert.equal(
-    selection.mission.currentMilestone,
-    "Complete runtime cleanup and establish the Melakat domain integration on the shared Engineering Runtime",
-  );
+  assert.equal(typeof selection.mission.currentMilestone, "string");
+  assert(selection.mission.currentMilestone.length > 0);
   assert(selection.mission.nextActions?.length);
+  assert(selection.mission.nextMilestones.length > 0);
 
   writeFileSync(
     join(root, "config", "missions", "projects.json"),

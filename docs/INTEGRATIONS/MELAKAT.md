@@ -1,6 +1,6 @@
 # Melakat Integration Foundation
 
-Status: MelakatDriver and real cross-repository campaign smoke verified; evidence-discovery actions added; restart/resume proof pending
+Status: MelakatDriver, real cross-repository campaign execution, evidence discovery, and restart-safe continuation proof verified
 
 ## Purpose
 
@@ -48,15 +48,16 @@ Mission definition:
 config/missions/melakat/melakat-development.json
 ```
 
-The mission focuses on:
+The mission now focuses on:
 
-- validating Melakat experiment specifications;
+- using the verified driver and Engineering Runtime for longer resumable development/research work;
 - running headless campaigns through the existing `melakat-experiment` CLI;
 - reading canonical campaign/summary/validation/checksum evidence;
 - identifying observed extinction runs for targeted inspection without inferring cause;
 - surfacing experimental-integrity failures such as failed invariants, reproducibility mismatch, or incomplete run counts;
 - preserving scientific controls and reproducibility;
-- proving restart/resume behavior through Keynu mission persistence.
+- continuing from persisted KAP/REPORT state without replaying completed experiment side effects;
+- moving to controlled Phase Three work only through verified runtime and scientific gates.
 
 ## Driver boundary
 
@@ -146,21 +147,52 @@ PR smoke run:       34039862056
 
 The workflow checked out both repositories, built Keynu, installed the real Melakat experiment entry point, and invoked the real Phase Two energy-sweep specification through MelakatDriver. The reduced integration smoke used one seed and 40 ticks, yielding three condition runs. Validation passed with zero failures and deterministic repeat equality.
 
-The smoke is **not** a scientific campaign and makes **no new scientific claim**. Its purpose is only to prove the integration path and canonical evidence readback. Persistent details are recorded in:
+The later evidence-discovery smoke also passed against the real Melakat repository and verified compact evidence, extinction scanning, and experimental-integrity scanning through the domain driver.
+
+These smokes are **not** scientific campaigns and make **no new scientific claim**. Their purpose is to prove the integration path and canonical evidence readback. Persistent details are recorded in:
 
 ```text
 docs/INTEGRATIONS/MELAKAT_SMOKE_EVIDENCE_2026-09-06.md
+```
+
+## Verified restart/resume proof
+
+Keynu now also has a real-domain restart-safety proof. The proof executes a reduced real Melakat campaign, persists the completed KAP REPORT, simulates interruption before report/continuation completion, recreates the relevant persistent runtime services, and confirms that the same experiment job ID is not executed again.
+
+The corrected proof run used Bash `pipefail` so Node assertion failures cannot be hidden by `tee`:
+
+```text
+Restart/resume run: 34050445737
+experimentExecutionCount: 1
+originalJobReexecuted: false
+recoveredUndeliveredReportAfterRestart: true
+continuationDeliveryStatus: DELIVERED
+duplicateContinuationDeliveryStatus: SKIPPED_DUPLICATE
+distinctNextAction: melakat.evidenceSummary
+distinctNextActionSucceeded: true
+validationPassed: true
+failureCount: 0
+reproducibilityIdentical: true
+evidenceChecksumCount: 6
+```
+
+This is a **runtime-safety proof**, not a biological or evolutionary result. Full details, including the discovered/fixed false-green `tee` issue and the limits of the proof, are recorded in:
+
+```text
+docs/INTEGRATIONS/MELAKAT_RESTART_RESUME_EVIDENCE_2026-09-07.md
 ```
 
 ## Scientific rule
 
 Automated execution does not weaken scientific discipline. Keynu may automate controlled runs and summarize evidence, but it must not infer adaptation, cooperation, competition, selection, navigation, or causal biological explanations beyond what the Melakat experiment design and results support.
 
-## Remaining proof obligations
+## Remaining integration/runtime obligations
 
-The remaining integration milestones are:
+The main remaining work is no longer basic Melakat connectivity. It is runtime consolidation and scaling:
 
-- validate the evidence-discovery actions against the real cross-repository smoke workflow;
-- prove restart/resume after persisted Melakat work without replaying completed side effects;
-- use the verified integration for controlled Phase Three development/research;
-- keep workflow-continuation and mission-continuation architecture reconciled as Keynu evolves.
+- reconcile `WorkflowContinuationService` with the persistent mission/browser continuation path so there is one continuation model;
+- run a longer multi-step resumable Melakat development/research mission;
+- exercise the standard local Windows Keynu/Melakat layout in addition to Linux CI;
+- audit the outstanding npm dependency vulnerabilities and choose a safe upgrade path;
+- remove only verified generated/backup/manual-test/historical repository garbage after reference checks;
+- use the verified integration for controlled Phase Three development/research while preserving previous scientific evidence contracts.
