@@ -1,13 +1,13 @@
 # Melakat Integration Foundation
 
-Status: mission/configuration foundation; domain driver pending
+Status: MelakatDriver v1 implemented; real cross-repository campaign smoke and restart/resume proof pending
 
 ## Purpose
 
 Keynu is being prepared to continuously develop and research Melakat. The integration is deliberately split into two layers:
 
 1. Keynu **Engineering Runtime** owns generic project operations such as filesystem IO, command/script execution, Git, build, test, and verification.
-2. A future **MelakatDriver** owns only Melakat-specific semantics such as experiment validation/execution and scientific artifact interpretation.
+2. **MelakatDriver** owns only Melakat-specific semantics such as experiment validation/execution and scientific artifact interpretation.
 
 Melakat remains the source of truth for its simulation code, scientific world contracts, experiment specifications, tests, and reproducible evidence.
 
@@ -59,7 +59,7 @@ The mission focuses on:
 
 ## Driver boundary
 
-MelakatDriver must **not** implement its own:
+MelakatDriver does **not** implement its own:
 
 - arbitrary file IO;
 - PowerShell or Node process layer;
@@ -67,9 +67,9 @@ MelakatDriver must **not** implement its own:
 - generic build/test command runner;
 - generic verification sequencer.
 
-Those are shared Engineering Runtime responsibilities.
+Those remain shared Engineering Runtime responsibilities.
 
-The driver may implement actions such as:
+MelakatDriver v1 currently implements:
 
 ```text
 melakat.status
@@ -78,11 +78,9 @@ melakat.runExperiment
 melakat.readCampaign
 melakat.readValidation
 melakat.compareConditions
-melakat.findExtinctions
-melakat.findAnomalies
 ```
 
-The exact action contract must follow the real Melakat CLI and artifact schemas, not a duplicated Keynu schema.
+The next domain layer will add targeted evidence discovery such as extinction/anomaly inspection without weakening the scientific interpretation rules.
 
 ## Current Melakat CLI contract
 
@@ -92,6 +90,19 @@ The Melakat repository exposes:
 melakat-experiment validate <spec> [--seed-count N] [--seed-start N] [--ticks N]
 melakat-experiment run <spec> --output-dir <dir> [--seed-count N] [--seed-start N] [--ticks N] [--quiet]
 ```
+
+MelakatDriver delegates command execution to Engineering Runtime. It first checks the standard Melakat virtual-environment entry points:
+
+```text
+desktop/.venv/Scripts/melakat-experiment.exe
+desktop/.venv/bin/melakat-experiment
+```
+
+and otherwise falls back to `melakat-experiment` on `PATH`.
+
+For safety and evidence locality, specification and output paths accepted by the domain actions must remain project-relative and may not escape the Melakat repository.
+
+## Campaign validity and evidence
 
 A successful campaign writes:
 
@@ -105,8 +116,23 @@ provenance.json
 SHA256SUMS.txt
 ```
 
-The driver should treat `validation.json.passed` plus process exit status as the primary campaign validity signal and preserve paths/checksums as evidence references.
+`melakat.runExperiment` treats a campaign as successful only when both conditions hold:
+
+1. the delegated process execution succeeds; and
+2. `validation.json` is readable and reports `passed: true`.
+
+The driver returns repository-relative evidence references rather than moving scientific truth into Keynu mission memory.
+
+`melakat.compareConditions` does not invent a new comparison algorithm. It reads the canonical `baseline_condition`, `conditions`, and `comparisons` already produced by Melakat's `summary.json`.
 
 ## Scientific rule
 
 Automated execution does not weaken scientific discipline. Keynu may automate controlled runs and summarize evidence, but it must not infer adaptation, cooperation, competition, selection, or navigation beyond what the Melakat experiment design and results causally support.
+
+## Remaining proof obligations
+
+MelakatDriver unit/regression coverage verifies command construction, virtual-environment CLI resolution, project-relative path containment, process-plus-validation gating, and canonical artifact reading. The remaining integration milestones are:
+
+- run a small real Melakat campaign through Keynu against the actual Melakat repository;
+- parse targeted extinction/anomaly inspection candidates from real artifacts;
+- prove restart/resume after persisted Melakat work without replaying completed side effects.
