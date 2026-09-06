@@ -2,6 +2,13 @@ import { EventBus } from '../kernel/EventBus.js';
 import { RuntimeEvents } from '../runtime/RuntimeEvents.js';
 import { WorkflowContinuationService } from './WorkflowContinuationService.js';
 
+/**
+ * @deprecated Legacy workflow compatibility only.
+ *
+ * This bridge installs a REPORT_CREATED continuation listener. It is retained
+ * only inside the quarantined workflow subsystem and must not be wired beside
+ * BrowserContinuationCoordinator in the active runtime.
+ */
 export class WorkflowEventBridge {
   constructor(
     private readonly events: EventBus,
@@ -13,9 +20,9 @@ export class WorkflowEventBridge {
       if (!payload?.workflowId) return;
 
       await this.continuation.check(
-  payload.workflowId,
-  payload,
-);
+        payload.workflowId,
+        payload,
+      );
     });
   }
 }

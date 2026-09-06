@@ -1,5 +1,12 @@
 import { RuntimeScheduler } from '../runtime/RuntimeScheduler.js';
 
+/**
+ * @deprecated Legacy workflow compatibility only.
+ *
+ * Jobs generated here enter RuntimeScheduler's in-memory queue and are not
+ * restart-safe. New durable continuation work must use the canonical mission
+ * continuation runtime.
+ */
 export class WorkflowJobGenerator {
   constructor(
     private readonly scheduler: RuntimeScheduler,

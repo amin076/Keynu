@@ -1,6 +1,14 @@
 import { WorkflowStore } from './WorkflowStore.js';
 import { WorkflowJobGenerator } from './WorkflowJobGenerator.js';
 
+/**
+ * @deprecated Legacy workflow compatibility only.
+ *
+ * The active mission runtime routes reports through
+ * BrowserContinuationCoordinator and the persistent continuation stores.
+ * This service schedules onto the legacy in-memory workflow path and must not
+ * be wired into an active runtime composition root.
+ */
 export class WorkflowContinuationService {
   constructor(
     private readonly store: WorkflowStore,
