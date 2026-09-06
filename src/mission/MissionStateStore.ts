@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import type {
   MissionRecoveryTestEvidence,
@@ -56,7 +62,9 @@ export class MissionStateStore {
     };
 
     mkdirSync(dirname(this.statePath), { recursive: true });
-    writeFileSync(this.statePath, JSON.stringify(normalized, null, 2), "utf8");
+    const temporaryPath = `${this.statePath}.${process.pid}.tmp`;
+    writeFileSync(temporaryPath, JSON.stringify(normalized, null, 2), "utf8");
+    renameSync(temporaryPath, this.statePath);
     return normalized;
   }
 
@@ -152,7 +160,6 @@ export class MissionStateStore {
   }
 
   recordJob(missionId: string, jobId: string): MissionRuntimeState {
-    // preserve terminal COMPLETED state
     const existing = this.read().missions[missionId];
     if (existing?.status === "COMPLETED") {
       return existing;
