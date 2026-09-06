@@ -11,10 +11,9 @@ import type {
   EngineeringPayload,
 } from "./EngineeringTypes.js";
 
-const FILESYSTEM_ACTIONS: Record<
-  Extract<EngineeringAction, `fs.${string}`>,
-  FileSystemAction
-> = {
+type EngineeringFileSystemAction = Extract<EngineeringAction, `fs.${string}`>;
+
+const FILESYSTEM_ACTIONS: Record<EngineeringFileSystemAction, FileSystemAction> = {
   "fs.readFile": "readFile",
   "fs.writeFile": "writeFile",
   "fs.createFolder": "createFolder",
@@ -29,6 +28,10 @@ const BLOCKED_ENGINEERING_COMMANDS = new Set([
   "reboot",
   "poweroff",
 ]);
+
+function isFilesystemAction(action: EngineeringAction): action is EngineeringFileSystemAction {
+  return action in FILESYSTEM_ACTIONS;
+}
 
 function requireString(value: unknown, label: string): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -67,7 +70,7 @@ export class EngineeringRuntime {
   ): Promise<EngineeringOperationResult> {
     const projectRoot = await this.resolveProjectRoot(payload.projectRoot);
 
-    if (action.startsWith("fs.")) {
+    if (isFilesystemAction(action)) {
       return await this.executeFilesystem(action, projectRoot, payload);
     }
 
@@ -134,14 +137,18 @@ export class EngineeringRuntime {
     if (!cwdInput) return projectRoot;
     const cwd = isAbsolute(cwdInput) ? resolve(cwdInput) : resolve(projectRoot, cwdInput);
     const rel = relative(projectRoot, cwd);
-    if (rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rel)) {
+    if (
+      rel === ".." ||
+      rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
+      isAbsolute(rel)
+    ) {
       throw new Error("Command cwd is outside the approved project root.");
     }
     return cwd;
   }
 
   private async executeFilesystem(
-    action: Extract<EngineeringAction, `fs.${string}`>,
+    action: EngineeringFileSystemAction,
     projectRoot: string,
     payload: EngineeringPayload,
   ): Promise<EngineeringOperationResult> {
@@ -203,7 +210,9 @@ export class EngineeringRuntime {
       action: "script.run",
       projectRoot,
       success: result.ok,
-      summary: result.ok ? `${runtime} script completed successfully.` : result.error ?? `${runtime} script failed.`,
+      summary: result.ok
+        ? `${runtime} script completed successfully.`
+        : result.error ?? `${runtime} script failed.`,
       data: result,
       commandResults: [result],
     };
@@ -222,9 +231,11 @@ export class EngineeringRuntime {
         joined.includes("reset --hard") ||
         normalized.includes("clean") ||
         normalized.includes("--force") ||
-        normalized.includes("-f") && normalized.includes("push")
+        (normalized.includes("-f") && normalized.includes("push"))
       ) {
-        throw new Error("Engineering Runtime blocks destructive Git command; use an explicitly governed path instead.");
+        throw new Error(
+          "Engineering Runtime blocks destructive Git command; use an explicitly governed path instead.",
+        );
       }
     }
   }
@@ -305,7 +316,8 @@ export class EngineeringRuntime {
       if (!result.ok && command.runAfterFailure !== true) break;
     }
 
-    const success = results.length === commands.length && results.every((result) => result.ok);
+    const success =
+      results.length === commands.length && results.every((result) => result.ok);
     return {
       action: "project.verify",
       projectRoot,
