@@ -53,6 +53,7 @@ jobs:
 
       - name: Run restart-resume proof
         working-directory: keynu
+        shell: bash
         env:
           MELAKAT_RESTART_PROJECT_ROOT: ../melakat
           MELAKAT_RESTART_SPEC_PATH: experiments/phase-two/local-resource-energy-sweep.json
@@ -60,7 +61,9 @@ jobs:
           MELAKAT_RESTART_TICKS: "40"
           MELAKAT_RESTART_SEED_COUNT: "1"
           MELAKAT_RESTART_SEED_START: "1"
-        run: node scripts/run-melakat-restart-resume-proof.mjs | tee melakat-restart-resume-proof.log
+        run: |
+          set -o pipefail
+          node scripts/run-melakat-restart-resume-proof.mjs | tee melakat-restart-resume-proof.log
 
       - name: Upload restart-resume evidence
         if: always()
