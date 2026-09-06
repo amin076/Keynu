@@ -7,40 +7,40 @@ try {
   const bootstrap = fixture.manager.prepare();
   const continuation = bootstrap.payload.context.continuation;
 
-  assert.equal(bootstrap.payload.missionId, "openai-build-week");
+  assert.equal(bootstrap.payload.missionId, "runtime-readiness-melakat");
   assert.equal(
     continuation.currentMilestone,
-    "Define the winning submission concept and minimum competition-ready demo",
+    "Complete runtime cleanup and establish the Melakat domain integration on the shared Engineering Runtime",
   );
   assert.deepEqual(
     continuation.pendingMilestones,
     [
-      "Audit the current working Keynu capabilities that can be demonstrated without speculative rebuilding",
-      "Choose one clear competition story and user problem",
-      "Build and verify the minimum competition-ready demo",
-      "Prepare the demo script and recording",
-      "Prepare submission description, evidence, and repository documentation",
-      "Complete and verify the submission before the deadline",
+      "Reconcile workflow continuation with the persistent mission continuation path",
+      "Remove only verified generated, backup, and historical runtime garbage without breaking compatibility contracts",
+      "Reconcile architecture and status documentation with the current runtime",
+      "Add Melakat as a Keynu project and implement a domain-specific MelakatDriver on top of Engineering Runtime",
+      "Create resumable Melakat development and research mission templates",
+      "Prove an end-to-end restart/resume Melakat mission with verified local actions and experiment evidence",
     ],
   );
   assert(continuation.architectureDecisions.length >= 4);
   assert.equal(
     continuation.recommendedReading[0]?.path,
-    "https://openai.com/build-week/",
+    "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
   );
   assert.equal(
     continuation.knownLimitations.some((item) =>
-      item.includes("does not yet fully validate every message-type payload"),
+      item.includes("MelakatDriver") && item.includes("not yet implemented"),
     ),
-    false,
+    true,
   );
   assert.equal(
     continuation.nextActions[0]?.title,
-    "Synchronize and activate the Build Week mission locally",
+    "Reconcile workflow and mission continuation",
   );
   assert.equal(
     bootstrap.payload.context.openTasks[0],
-    "Audit the current working Keynu capabilities that can be demonstrated without speculative rebuilding",
+    "Reconcile workflow continuation with the persistent mission continuation path",
   );
 
   console.log("Project Continuation Bootstrap tests passed.");
