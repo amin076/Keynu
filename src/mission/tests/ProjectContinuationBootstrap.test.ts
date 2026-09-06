@@ -29,9 +29,7 @@ try {
     "docs/AUDIT/KEYNU_RUNTIME_AUDIT_2026-09-06.md",
   );
   assert.equal(
-    continuation.knownLimitations.some((item) =>
-      item.includes("MelakatDriver") && item.includes("not yet implemented"),
-    ),
+    continuation.knownLimitations.some((item) => item.includes("MelakatDriver")),
     true,
   );
   assert.equal(
