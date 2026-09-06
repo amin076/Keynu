@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CapabilityRegistry } from "../core/CapabilityRegistry.js";
 import type { Driver, DriverResult } from "../core/Driver.js";
 import { IntegrationHub } from "./IntegrationHub.js";
@@ -8,6 +8,10 @@ export type IntegrationDriverOptions = {
   capabilityRegistry?: CapabilityRegistry;
   manifestDirectory?: string;
 };
+
+const DEFAULT_MANIFEST_DIRECTORY = fileURLToPath(
+  new URL("../../config/integrations/", import.meta.url),
+);
 
 export class IntegrationDriver implements Driver {
   readonly id = "integration";
@@ -22,7 +26,7 @@ export class IntegrationDriver implements Driver {
   constructor(options: IntegrationDriverOptions = {}) {
     this.hub = options.hub ?? new IntegrationHub();
     this.capabilityRegistry = options.capabilityRegistry;
-    this.manifestDirectory = options.manifestDirectory ?? resolve(process.cwd(), "config/integrations");
+    this.manifestDirectory = options.manifestDirectory ?? DEFAULT_MANIFEST_DIRECTORY;
   }
 
   async initialize(): Promise<void> {
