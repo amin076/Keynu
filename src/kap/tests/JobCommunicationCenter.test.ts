@@ -183,6 +183,86 @@ try {
   assert.equal(typeof recoveredStored?.reportDeliveredAt, "string");
   assert.equal(recoveredStored?.reportDeliveryAttempts, 1);
 
+  // A slow/busy chat transport must not delay lifecycle advancement or the
+  // underlying executor. The first status delivery is deliberately held open;
+  // RECEIVED/ANALYZED/STARTED must still return because only durable audit is
+  // synchronous. The terminal report later waits for queued statuses so order
+  // remains deterministic.
+  let releaseBlockedStatus!: () => void;
+  let markStatusStarted!: () => void;
+  const blockedStatus = new Promise<void>((resolve) => {
+    releaseBlockedStatus = resolve;
+  });
+  const statusStarted = new Promise<void>((resolve) => {
+    markStatusStarted = resolve;
+  });
+  let statusStartMarked = false;
+  const nonBlockingJobId = "job-nonblocking-status-test";
+  const nonBlockingStore = new PersistentJobStore(root);
+  const nonBlockingCenter = new JobCommunicationCenter(
+    async (message) => {
+      if (message.includes('"type": "JOB_STATUS"')) {
+        if (!statusStartMarked) {
+          statusStartMarked = true;
+          markStatusStarted();
+        }
+        await blockedStatus;
+      }
+    },
+    {
+      cwd: root,
+      jobStore: nonBlockingStore,
+      heartbeatIntervalMs: 100000,
+      statusMinIntervalMs: 0,
+      reportDeliveryAttempts: 1,
+    },
+  );
+  const nonBlockingKap = {
+    ...kap,
+    id: nonBlockingJobId,
+  };
+
+  await nonBlockingStore.claim(nonBlockingJobId);
+  const receivedWithoutTransport = await Promise.race([
+    nonBlockingCenter.received(nonBlockingKap).then(() => true),
+    sleep(50).then(() => false),
+  ]);
+  assert.equal(
+    receivedWithoutTransport,
+    true,
+    "RECEIVED audit must not wait for a blocked browser status transport",
+  );
+  await statusStarted;
+  await nonBlockingCenter.analyzed(nonBlockingKap, { commandCount: 1 });
+  await nonBlockingStore.set(nonBlockingJobId, "RUNNING");
+  await nonBlockingCenter.started(nonBlockingKap);
+  await nonBlockingCenter.terminal(nonBlockingKap, "COMPLETED");
+
+  releaseBlockedStatus();
+  const nonBlockingReport = [
+    "```kap",
+    JSON.stringify(
+      {
+        protocol: "KAP",
+        version: "1.0",
+        type: "REPORT",
+        id: `report-${nonBlockingJobId}`,
+        createdAt: new Date().toISOString(),
+        payload: { jobId: nonBlockingJobId, status: "COMPLETED" },
+      },
+      null,
+      2,
+    ),
+    "```",
+  ].join("\n");
+  const nonBlockingDelivery = await nonBlockingCenter.deliverTerminalReport(
+    nonBlockingKap,
+    "COMPLETED",
+    nonBlockingReport,
+    `report-${nonBlockingJobId}`,
+  );
+  assert.equal(nonBlockingDelivery.delivered, true);
+
   console.log("Job communication center tests passed.");
 } finally {
   await rm(root, { recursive: true, force: true });

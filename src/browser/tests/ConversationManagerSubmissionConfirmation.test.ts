@@ -1,51 +1,42 @@
 import assert from "node:assert/strict";
 import { ConversationManager } from "../ConversationManager.js";
 
-type Value<T> = T | (() => T);
-
-class FakeLocator {
+class FakeUserMessageLocator {
   constructor(
-    private readonly counts: Value<number>[] = [0],
-    private readonly evaluations: Value<boolean>[] = [false],
+    private readonly totalCount: number,
+    private readonly texts: Array<string | null>,
   ) {}
 
-  last(): FakeLocator {
-    return this;
-  }
-
   async count(): Promise<number> {
-    const value = this.counts.length > 1 ? this.counts.shift()! : this.counts[0]!;
-    return typeof value === "function" ? value() : value;
+    return this.totalCount;
   }
 
-  async evaluate(..._args: unknown[]): Promise<boolean> {
-    const value =
-      this.evaluations.length > 1
-        ? this.evaluations.shift()!
-        : this.evaluations[0]!;
-    return typeof value === "function" ? value() : value;
+  nth(index: number): { textContent(): Promise<string | null> } {
+    return {
+      textContent: async () => this.texts[index] ?? null,
+    };
   }
 }
 
-interface HarnessOptions {
-  composerEmpty?: boolean[];
-  messageCounts?: number[];
-  buttonCounts?: number[];
-  buttonBusy?: boolean[];
-}
+type ComposerProbe = {
+  evaluate(...args: unknown[]): Promise<string>;
+};
 
-function createHarness(options: HarnessOptions = {}) {
-  const input = new FakeLocator([1], options.composerEmpty ?? [false]);
-  const messages = new FakeLocator(options.messageCounts ?? [0], [false]);
-  const button = new FakeLocator(
-    options.buttonCounts ?? [0],
-    options.buttonBusy ?? [false],
-  );
+type CleanupComposerProbe = ComposerProbe & {
+  fill(value: string): Promise<void>;
+  click(options?: unknown): Promise<void>;
+};
 
+function createConfirmationHarness(
+  totalCount: number,
+  texts: Array<string | null>,
+) {
   let now = 0;
+  const userMessages = new FakeUserMessageLocator(totalCount, texts);
   const page = {
-    locator(selector: string): FakeLocator {
-      return selector === "[data-message-author-role]" ? messages : button;
+    locator(selector: string): FakeUserMessageLocator {
+      assert.equal(selector, '[data-message-author-role="user"]');
+      return userMessages;
     },
     async waitForTimeout(milliseconds: number): Promise<void> {
       now += milliseconds;
@@ -55,18 +46,18 @@ function createHarness(options: HarnessOptions = {}) {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
   Object.assign(manager as object, { page });
 
-  return { manager, input, getNow: () => now };
+  return { manager, getNow: () => now };
 }
 
 async function invokeConfirmation(
   manager: ConversationManager,
-  input: FakeLocator,
   baseline: number,
+  signature: string,
 ): Promise<void> {
   const internal = manager as unknown as {
-    confirmMessageSubmitted(input: FakeLocator, baseline: number): Promise<void>;
+    confirmMessageSubmitted(baseline: number, signature: string): Promise<void>;
   };
-  await internal.confirmMessageSubmitted(input, baseline);
+  await internal.confirmMessageSubmitted(baseline, signature);
 }
 
 async function withFakeClock<T>(
@@ -82,188 +73,182 @@ async function withFakeClock<T>(
   }
 }
 
-async function composerEmptyCase(): Promise<void> {
-  const harness = createHarness({ composerEmpty: [true] });
+async function matchingUserMessageConfirmsCase(): Promise<void> {
+  const harness = createConfirmationHarness(5, [
+    "old-0",
+    "old-1",
+    "old-2",
+    "old-3",
+    "terminal report report-job-123 completed",
+  ]);
+
   await withFakeClock(harness.getNow, () =>
-    invokeConfirmation(harness.manager, harness.input, 4),
+    invokeConfirmation(harness.manager, 4, "report-job-123"),
   );
+
   assert.equal(harness.getNow(), 0);
 }
 
-async function messageCountCase(): Promise<void> {
-  const harness = createHarness({
-    composerEmpty: [false],
-    messageCounts: [5],
-  });
-  await withFakeClock(harness.getNow, () =>
-    invokeConfirmation(harness.manager, harness.input, 4),
-  );
-  assert.equal(harness.getNow(), 0);
-}
-
-async function busyToReadyCase(): Promise<void> {
-  const harness = createHarness({
-    composerEmpty: [false, false],
-    messageCounts: [4, 4],
-    buttonCounts: [1, 1],
-    buttonBusy: [true, false],
-  });
-  await withFakeClock(harness.getNow, () =>
-    invokeConfirmation(harness.manager, harness.input, 4),
-  );
-  assert.equal(harness.getNow(), 200);
-}
-
-async function timeoutCase(): Promise<void> {
-  const harness = createHarness({
-    composerEmpty: [false],
-    messageCounts: [4],
-    buttonCounts: [0],
-  });
+async function unrelatedMessageMustNotFalseConfirmCase(): Promise<void> {
+  const harness = createConfirmationHarness(5, [
+    "old-0",
+    "old-1",
+    "old-2",
+    "old-3",
+    "another unrelated message appeared",
+  ]);
 
   await assert.rejects(
     () =>
       withFakeClock(harness.getNow, () =>
-        invokeConfirmation(harness.manager, harness.input, 4),
+        invokeConfirmation(harness.manager, 4, "report-job-123"),
       ),
     (error: unknown) =>
       error instanceof Error &&
-      error.message === "ChatGPT message submission could not be confirmed.",
+      error.message.includes(
+        "ChatGPT message submission could not be confirmed by a matching user message",
+      ),
   );
 
   assert.equal(harness.getNow(), 12000);
 }
 
-interface SendMessageHarnessOptions {
-  baselineCount?: number;
-  countError?: Error;
+async function occupiedComposerIsRejectedCase(): Promise<void> {
+  const manager = Object.create(ConversationManager.prototype) as ConversationManager;
+  const input: ComposerProbe = {
+    async evaluate(): Promise<string> {
+      return "unsent previous Keynu report";
+    },
+  };
+
+  const internal = manager as unknown as {
+    assertComposerEmpty(composer: ComposerProbe): Promise<void>;
+  };
+
+  await assert.rejects(
+    () => internal.assertComposerEmpty(input),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.message ===
+        "ChatGPT composer is occupied; Keynu refused to append to or overwrite an existing draft.",
+  );
 }
 
-function createSendMessageHarness(options: SendMessageHarnessOptions = {}) {
-  const events: string[] = [];
-  const insertedMessages: string[] = [];
-  const forwardedBaselines: number[] = [];
-  let inputClicks = 0;
-  let stateValue = "initial";
-
-  const input = {
-    async click(options: { force: boolean }): Promise<void> {
-      assert.deepEqual(options, { force: true });
-      inputClicks += 1;
-      events.push("input-click");
+async function unreadableComposerFailsClosedCase(): Promise<void> {
+  const manager = Object.create(ConversationManager.prototype) as ConversationManager;
+  const input: ComposerProbe = {
+    async evaluate(): Promise<string> {
+      throw new Error("simulated DOM read failure");
     },
   };
 
-  const messageLocator = {
-    async count(): Promise<number> {
-      events.push("baseline-count");
-      if (options.countError) {
-        throw options.countError;
-      }
-      return options.baselineCount ?? 0;
-    },
+  const internal = manager as unknown as {
+    assertComposerEmpty(composer: ComposerProbe): Promise<void>;
   };
 
-  const page = {
-    locator(selector: string): typeof messageLocator {
-      assert.equal(selector, "[data-message-author-role]");
-      events.push("baseline-locator");
-      return messageLocator;
+  await assert.rejects(
+    () => internal.assertComposerEmpty(input),
+    (error: unknown) =>
+      error instanceof Error && error.message === "simulated DOM read failure",
+  );
+}
+
+async function failedOwnedDraftCanBeCleanedCase(): Promise<void> {
+  const manager = Object.create(ConversationManager.prototype) as ConversationManager;
+  let cleared = false;
+  const input: CleanupComposerProbe = {
+    async evaluate(): Promise<string> {
+      return "```kap report-job-123 ```";
     },
-    keyboard: {
-      async insertText(message: string): Promise<void> {
-        insertedMessages.push(message);
-        events.push("insert-text");
+    async fill(value: string): Promise<void> {
+      assert.equal(value, "");
+      cleared = true;
+    },
+    async click(): Promise<void> {},
+  };
+  Object.assign(manager as object, {
+    page: {
+      keyboard: {
+        async press(): Promise<void> {},
       },
     },
-    async waitForTimeout(milliseconds: number): Promise<void> {
-      assert.equal(milliseconds, 300);
-      events.push("typing-delay");
-    },
+  });
+
+  const internal = manager as unknown as {
+    cleanupOwnedDraft(
+      composer: CleanupComposerProbe,
+      message: string,
+      signature: string,
+    ): Promise<void>;
   };
 
+  await internal.cleanupOwnedDraft(
+    input,
+    "```kap\n{\"id\":\"report-job-123\"}\n```",
+    "report-job-123",
+  );
+
+  assert.equal(cleared, true);
+}
+
+async function kapIdIsSubmissionSignatureCase(): Promise<void> {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
-  Object.assign(manager as object, {
-    page,
-    state: stateValue,
-    async getMessageInput() {
-      events.push("get-input");
-      return input;
-    },
-    async submitMessage(receivedInput: typeof input) {
-      assert.equal(receivedInput, input);
-      events.push("submit-message");
-    },
-    async confirmMessageSubmitted(
-      receivedInput: typeof input,
-      baseline: number,
-    ) {
-      assert.equal(receivedInput, input);
-      forwardedBaselines.push(baseline);
-      events.push("confirm-message");
-    },
-  });
-
-  return {
-    manager,
-    events,
-    insertedMessages,
-    forwardedBaselines,
-    getInputClicks: () => inputClicks,
-    getState: () => (manager as unknown as { state: string }).state,
+  const internal = manager as unknown as {
+    submissionSignature(message: string): string;
   };
+
+  assert.equal(
+    internal.submissionSignature(
+      '```kap\n{"protocol":"KAP","id":"report-job-456"}\n```',
+    ),
+    "report-job-456",
+  );
 }
 
-async function sendMessageCapturedBaselineCase(): Promise<void> {
-  const harness = createSendMessageHarness({ baselineCount: 7 });
+async function outboundMessagesAreSerializedCase(): Promise<void> {
+  const manager = Object.create(ConversationManager.prototype) as ConversationManager;
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const events: string[] = [];
 
-  await harness.manager.sendMessage("KAP regression payload");
-
-  assert.equal(harness.getInputClicks(), 1);
-  assert.deepEqual(harness.insertedMessages, ["KAP regression payload"]);
-  assert.deepEqual(harness.forwardedBaselines, [7]);
-  assert.equal(harness.getState(), "ready");
-  assert.deepEqual(harness.events, [
-    "get-input",
-    "baseline-locator",
-    "baseline-count",
-    "input-click",
-    "insert-text",
-    "typing-delay",
-    "submit-message",
-    "confirm-message",
-  ]);
-}
-
-async function sendMessageBaselineFallbackCase(): Promise<void> {
-  const harness = createSendMessageHarness({
-    countError: new Error("simulated locator failure"),
+  Object.assign(manager as object, {
+    outboundChain: Promise.resolve(),
+    async sendMessageOnce(message: string): Promise<void> {
+      events.push(`start:${message}`);
+      if (message === "first") {
+        await firstGate;
+      }
+      events.push(`end:${message}`);
+    },
   });
 
-  await harness.manager.sendMessage("fallback payload");
+  const first = manager.sendMessage("first");
+  const second = manager.sendMessage("second");
 
-  assert.deepEqual(harness.insertedMessages, ["fallback payload"]);
-  assert.deepEqual(harness.forwardedBaselines, [0]);
-  assert.equal(harness.getState(), "ready");
-  assert.deepEqual(harness.events, [
-    "get-input",
-    "baseline-locator",
-    "baseline-count",
-    "input-click",
-    "insert-text",
-    "typing-delay",
-    "submit-message",
-    "confirm-message",
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(events, ["start:first"]);
+
+  releaseFirst();
+  await Promise.all([first, second]);
+  assert.deepEqual(events, [
+    "start:first",
+    "end:first",
+    "start:second",
+    "end:second",
   ]);
 }
 
 async function run(): Promise<void> {
-  await composerEmptyCase();
-  await messageCountCase();
-  await busyToReadyCase();
-  await timeoutCase();
-  await sendMessageCapturedBaselineCase();
-  await sendMessageBaselineFallbackCase();
+  await matchingUserMessageConfirmsCase();
+  await unrelatedMessageMustNotFalseConfirmCase();
+  await occupiedComposerIsRejectedCase();
+  await unreadableComposerFailsClosedCase();
+  await failedOwnedDraftCanBeCleanedCase();
+  await kapIdIsSubmissionSignatureCase();
+  await outboundMessagesAreSerializedCase();
   console.log("ConversationManager submission-confirmation regression tests passed.");
 }
 

@@ -71,7 +71,7 @@ export type TerminalReportDeliveryResult = {
 type JobRuntimeState = {
   startedAt: number;
   lastProgressAt: number;
-  lastStatusSentAt: number;
+  lastStatusQueuedAt: number;
   currentStep?: string;
   heartbeatTimer?: ReturnType<typeof setInterval>;
   heartbeatInFlight: boolean;
@@ -100,6 +100,7 @@ export class JobCommunicationCenter {
   private readonly jobStore: PersistentJobStore;
   private readonly runtime = new Map<string, JobRuntimeState>();
   private deliveryChain: Promise<void> = Promise.resolve();
+  private auditChain: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly sendMessage: (message: string) => Promise<void>,
@@ -124,7 +125,7 @@ export class JobCommunicationCenter {
     this.runtime.set(kap.id, {
       startedAt: now,
       lastProgressAt: now,
-      lastStatusSentAt: 0,
+      lastStatusQueuedAt: 0,
       heartbeatInFlight: false,
     });
     await this.recordAndNotify(
@@ -145,7 +146,7 @@ export class JobCommunicationCenter {
       "ANALYZED",
       "KAP job validated and analyzed; execution plan accepted.",
       details,
-      true,
+      false,
     );
   }
 
@@ -157,7 +158,7 @@ export class JobCommunicationCenter {
       "STARTED",
       "KAP job execution started.",
       undefined,
-      true,
+      false,
     );
     this.startHeartbeat(kap);
   }
@@ -362,13 +363,16 @@ export class JobCommunicationCenter {
     const shouldSend =
       force ||
       stage === "RECEIVED" ||
-      stage === "ANALYZED" ||
-      stage === "STARTED" ||
       stage === "HEARTBEAT" ||
       stage === "STEP_FAILED" ||
-      now - state.lastStatusSentAt >= this.statusMinIntervalMs;
+      now - state.lastStatusQueuedAt >= this.statusMinIntervalMs;
 
     if (!shouldSend) return;
+
+    // Throttle at enqueue time, not successful-delivery time. This prevents a
+    // busy ChatGPT composer from allowing many rapid step events to pile up
+    // behind one slow status submission.
+    state.lastStatusQueuedAt = now;
 
     const envelope = {
       protocol: "KAP",
@@ -396,39 +400,52 @@ export class JobCommunicationCenter {
       },
     };
 
-    try {
-      await this.sendSerialized(wrapKap(envelope));
-      state.lastStatusSentAt = Date.now();
-      await this.record(
-        kap,
-        "STATUS_DELIVERED",
-        `Non-terminal ${stage} status was submitted successfully.`,
-        { statusStage: stage },
-      );
-    } catch (error) {
-      await this.record(
-        kap,
-        "STATUS_DELIVERY_FAILED",
-        "Non-terminal status delivery failed; execution will continue.",
-        { statusStage: stage, error: describeError(error) },
-      );
-    }
+    // Non-terminal telemetry must never delay or determine executor success.
+    // It is queued on the single browser transport lane and audited when that
+    // transport eventually succeeds or fails. ANALYZED/STARTED and ordinary
+    // rapid step transitions remain durable in audit but are chat-throttled so
+    // they cannot create a burst of assistant turns before the final REPORT.
+    this.enqueueStatusDelivery(kap, stage, wrapKap(envelope));
+  }
+
+  private enqueueStatusDelivery(
+    kap: KapEnvelope,
+    stage: JobLifecycleStage,
+    message: string,
+  ): void {
+    void this.enqueueDelivery(async () => {
+      try {
+        await this.sendMessage(message);
+        await this.record(
+          kap,
+          "STATUS_DELIVERED",
+          `Non-terminal ${stage} status was submitted successfully.`,
+          { statusStage: stage },
+        );
+      } catch (error) {
+        await this.record(
+          kap,
+          "STATUS_DELIVERY_FAILED",
+          "Non-terminal status delivery failed; execution will continue.",
+          { statusStage: stage, error: describeError(error) },
+        );
+      }
+    });
   }
 
   private async sendSerialized(message: string): Promise<void> {
-    let release: (() => void) | undefined;
-    const previous = this.deliveryChain;
-    this.deliveryChain = new Promise<void>((resolvePromise) => {
-      release = resolvePromise;
-    });
+    await this.enqueueDelivery(() => this.sendMessage(message));
+  }
 
-    await previous.catch(() => undefined);
+  private enqueueDelivery(operation: () => Promise<void>): Promise<void> {
+    const run = this.deliveryChain
+      .catch(() => undefined)
+      .then(operation);
 
-    try {
-      await this.sendMessage(message);
-    } finally {
-      release?.();
-    }
+    // Keep the lane usable after a failed terminal delivery attempt. Callers
+    // still receive the original run rejection so retry logic can act on it.
+    this.deliveryChain = run.catch(() => undefined);
+    return run;
   }
 
   private async record(
@@ -450,8 +467,16 @@ export class JobCommunicationCenter {
       details,
     };
 
-    await mkdir(dirname(this.auditPath), { recursive: true });
-    await appendFile(this.auditPath, JSON.stringify(event) + "\n", "utf8");
+    const line = JSON.stringify(event) + "\n";
+    const write = this.auditChain
+      .catch(() => undefined)
+      .then(async () => {
+        await mkdir(dirname(this.auditPath), { recursive: true });
+        await appendFile(this.auditPath, line, "utf8");
+      });
+
+    this.auditChain = write.catch(() => undefined);
+    await write;
     return event;
   }
 
@@ -463,7 +488,7 @@ export class JobCommunicationCenter {
     const state: JobRuntimeState = {
       startedAt: now,
       lastProgressAt: now,
-      lastStatusSentAt: 0,
+      lastStatusQueuedAt: 0,
       heartbeatInFlight: false,
     };
     this.runtime.set(jobId, state);

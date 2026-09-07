@@ -1,27 +1,50 @@
-import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { strict as assert } from "node:assert";
+import { ProviderRuntime } from "../../runtime/ProviderRuntime.js";
+import type { ProviderResponse } from "../../providers/api/ProviderResponse.js";
 
-const source = readFileSync('src/browser/BrowserAgent.ts', 'utf8');
+function response(content: string, id: string): ProviderResponse {
+  return {
+    id,
+    requestId: `request-${id}`,
+    providerId: "browser-agent-chatgpt",
+    content,
+    createdAt: new Date().toISOString(),
+  };
+}
 
-assert.match(
-  source,
-  /KAP extraction or validation failed/ ,
-  'BrowserAgent must detect invalid or missing KAP responses.',
-);
-assert.match(
-  source,
-  /Recover after non-KAP assistant response/ ,
-  'BrowserAgent must request recovery instead of silently stopping.',
-);
-assert.match(
-  source,
-  /await conversation\.sendMessage\(message\)/ ,
-  'Non-KAP recovery must deliver the continuation request through the active conversation.',
-);
-assert.match(
-  source,
-  /await watcher\.markFailed\(messageText\)/ ,
-  'The invalid assistant message must still be marked as failed.',
+const runtime = new ProviderRuntime();
+
+const prose = await runtime.execute(
+  response("This is an ordinary ChatGPT explanation, not a KAP command.", "prose"),
+  { source: "browser-agent" },
 );
 
-console.log('PASS BrowserAgentNonKapRecovery');
+assert.equal(prose.items.length, 1);
+assert.equal(prose.items[0]?.envelope.type, "IGNORED");
+assert.equal(prose.items[0]?.action, "UNHANDLED");
+assert.equal(prose.items[0]?.status, "SKIPPED");
+assert.match(
+  prose.items[0]?.message ?? "",
+  /ignored without requesting recovery/i,
+);
+
+const malformed = await runtime.execute(
+  response("```kap\n{ definitely-not-valid-json }\n```", "malformed"),
+  { source: "browser-agent" },
+);
+
+assert.equal(malformed.items.length, 1);
+assert.equal(malformed.items[0]?.envelope.type, "IGNORED");
+assert.equal(malformed.items[0]?.action, "UNHANDLED");
+
+const genericProvider = await runtime.execute(
+  response("Ordinary provider prose", "generic"),
+  { source: "unit-test" },
+);
+assert.equal(
+  genericProvider.items.length,
+  0,
+  "Non-browser ProviderRuntime callers must preserve the existing no-KAP behavior.",
+);
+
+console.log("PASS BrowserAgentNonKapRecovery safe-ignore policy");

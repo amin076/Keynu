@@ -12,6 +12,7 @@ try {
       <body>
         <main id="app-shell"></main>
         <div id="submitted-message"></div>
+        <div id="conversation"></div>
         <script>
           setTimeout(() => {
             const composer = document.createElement('div');
@@ -22,8 +23,14 @@ try {
             send.setAttribute('data-testid', 'send-button');
             send.textContent = 'Send';
             send.addEventListener('click', () => {
-              document.querySelector('#submitted-message').textContent =
-                composer.textContent || '';
+              const text = composer.textContent || '';
+              document.querySelector('#submitted-message').textContent = text;
+
+              const userMessage = document.createElement('div');
+              userMessage.setAttribute('data-message-author-role', 'user');
+              userMessage.textContent = text;
+              document.querySelector('#conversation').appendChild(userMessage);
+
               composer.textContent = '';
               composer.dispatchEvent(new InputEvent('input', { bubbles: true }));
             });
@@ -45,6 +52,10 @@ try {
   );
   assert.equal(
     await page.locator("#submitted-message").textContent(),
+    "delayed composer verification",
+  );
+  assert.equal(
+    await page.locator('[data-message-author-role="user"]').textContent(),
     "delayed composer verification",
   );
   assert.equal(manager.getState(), "ready");
