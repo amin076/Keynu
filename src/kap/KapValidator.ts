@@ -43,7 +43,6 @@ const BaseEnvelopeShape = {
   protocol: z.literal("KAP"),
   version: z.literal("1.0"),
   id: NonEmptyString,
-  // Kept optional for KAP 1.0 compatibility. Mission/bootstrap emitters always include it.
   createdAt: z.iso.datetime({ offset: true }).optional(),
   metadata: KapEnvelopeMetadataSchema.optional(),
 };
@@ -55,6 +54,40 @@ export const KapJobSchema = z.object({
     .object({
       target: NonEmptyString,
       cwd: NonEmptyString.optional(),
+    })
+    .passthrough(),
+});
+
+export const KapJobStatusSchema = z.object({
+  ...BaseEnvelopeShape,
+  type: z.literal("JOB_STATUS"),
+  payload: z
+    .object({
+      jobId: NonEmptyString,
+      stage: z.enum([
+        "RECEIVED",
+        "ANALYZED",
+        "STARTED",
+        "STEP_STARTED",
+        "STEP_COMPLETED",
+        "STEP_FAILED",
+        "STEP_SKIPPED",
+        "HEARTBEAT",
+        "REPORT_PERSISTED",
+        "REPORT_DELIVERY_ATTEMPT",
+        "REPORT_DELIVERED",
+        "REPORT_DELIVERY_FAILED",
+        "COMPLETED",
+        "FAILED",
+      ]),
+      status: NonEmptyString.optional(),
+      message: z.string().optional(),
+      elapsedMs: z.number().nonnegative().optional(),
+      currentStep: z.string().optional(),
+      details: z.record(z.string(), z.unknown()).optional(),
+      requiresResponse: z.boolean().optional(),
+      noActionRequired: z.boolean().optional(),
+      instruction: z.string().optional(),
     })
     .passthrough(),
 });
@@ -176,6 +209,7 @@ export const KapTerminalSchema = z.object({
 export const KapEnvelopeSchema = z.discriminatedUnion("type", [
   KapTerminalSchema,
   KapJobSchema,
+  KapJobStatusSchema,
   KapReportSchema,
   KapErrorSchema,
   KapMissionAckSchema,
