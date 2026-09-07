@@ -10,8 +10,8 @@ cpSync(join(process.cwd(), "config", "missions"), join(root, "config", "missions
 
 try {
   const selection = new MissionRegistry(root).getActiveMission();
-  assert.equal(selection.project.id, "keynu");
-  assert.equal(selection.mission.id, "runtime-readiness-melakat");
+  assert.equal(selection.project.id, "melakat");
+  assert.equal(selection.mission.id, "melakat-development");
   assert.equal(typeof selection.mission.currentMilestone, "string");
   assert(selection.mission.currentMilestone.length > 0);
   assert(selection.mission.nextActions?.length);
