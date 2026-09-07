@@ -5,10 +5,13 @@ import type { AssistantMessageSnapshot } from "./AssistantMessageSnapshot.js";
 
 
 const CHATGPT_COMPOSER_SELECTOR = [
+  '[data-testid="composer-text-input"]:visible',
   '#prompt-textarea:visible',
+  '[contenteditable="true"][role="textbox"]:visible',
   'div.ProseMirror[contenteditable="true"]:visible',
   '[contenteditable="true"][data-virtualkeyboard="true"]:visible',
   'form [contenteditable="true"]:visible',
+  'textarea[name="prompt-textarea"]:visible',
   'textarea:visible',
 ].join(', ');
 
@@ -174,6 +177,7 @@ export class ConversationManager {
       },
     );
   }
+
   async sendMessage(message: string): Promise<void> {
     const input = await this.getMessageInput();
     const messageCountBeforeSubmit = await this.page
@@ -192,6 +196,7 @@ export class ConversationManager {
 
     this.state = "ready";
   }
+
   private async confirmMessageSubmitted(
     input: Locator,
     messageCountBeforeSubmit: number,
@@ -287,40 +292,29 @@ export class ConversationManager {
   }
 
   private async getMessageInput(): Promise<Locator> {
-
-    const selectors = [
-      '[contenteditable="true"][role="textbox"]',
-      '[data-testid="composer-text-input"]',
-      '#prompt-textarea',
-      'div[contenteditable="true"]',
-      'textarea:visible',
-    ];
-
-
-    for (const selector of selectors) {
-
-      const candidate = this.page.locator(CHATGPT_COMPOSER_SELECTOR).last();
-
-
-      if ((await candidate.count()) > 0) {
-
-        try {
-
-          await candidate.waitFor({
-            state: "visible",
-            timeout: 3000,
-          });
-
-          return candidate;
-
-        } catch {}
-      }
+    if (this.page.isClosed()) {
+      throw new Error(
+        "ChatGPT message input was not found because the browser page is closed",
+      );
     }
 
+    const candidate = this.page.locator(CHATGPT_COMPOSER_SELECTOR).last();
 
-    throw new Error(
-      "ChatGPT message input was not found",
-    );
+    try {
+      // ChatGPT's application shell can reach DOMContentLoaded before the
+      // composer is hydrated, especially on project/custom-GPT conversation
+      // routes. Wait for the live composer instead of checking synchronously
+      // and failing during that hydration window.
+      await candidate.waitFor({
+        state: "visible",
+        timeout: 20000,
+      });
+      return candidate;
+    } catch {
+      throw new Error(
+        "ChatGPT message input was not found after waiting for composer hydration",
+      );
+    }
   }
 
 
