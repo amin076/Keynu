@@ -43,6 +43,7 @@ This design had five operational gaps:
 ChatGPT ── KAP JOB ─────►│ JobCommunicationCenter           │
                          │ receive / analyze / lifecycle    │
                          │ durable audit / heartbeat        │
+                         │ serialized outbound delivery     │
                          └──────────────┬───────────────────┘
                                         │
                               execution + progress callback
@@ -81,10 +82,12 @@ Lifecycle stages:
 - `STEP_FAILED` — a driver operation failed.
 - `STEP_SKIPPED` — fail-fast policy skipped an operation.
 - `HEARTBEAT` — the job is still running.
+- `STATUS_DELIVERED` — a non-terminal status submission succeeded.
+- `STATUS_DELIVERY_FAILED` — a non-terminal status submission failed without failing execution.
 - `REPORT_PERSISTED` — terminal report is durable before transport.
 - `REPORT_DELIVERY_ATTEMPT` — delivery retry accounting.
 - `REPORT_DELIVERED` — browser submission layer confirmed report submission.
-- `REPORT_DELIVERY_FAILED` — a delivery attempt failed.
+- `REPORT_DELIVERY_FAILED` — a terminal report delivery attempt failed.
 - `COMPLETED` / `FAILED` — terminal execution state in the audit stream.
 
 A `JOB_STATUS` message is telemetry only. It carries `requiresResponse: false` and instructs the receiving AI not to issue a replacement job before a terminal report/error.
@@ -106,6 +109,8 @@ Default policy:
 | terminal retry delays | 1s, 3s, 10s, 30s |
 
 Failures are not hidden by throttling. A `STEP_FAILED` status is eligible for immediate delivery.
+
+All outbound lifecycle and terminal messages pass through one serialized communication lane. This prevents a heartbeat, step transition, and final report from trying to use the browser composer concurrently. Serialization is transport coordination only; executor work and the durable audit remain independent.
 
 ## Durable state
 
@@ -156,6 +161,17 @@ PowerShell and generic command routing expose progress callbacks. PowerShell rep
 Filesystem routing reports start/completion/failure. Generic runtime results are translated into lifecycle step events as well.
 
 Progress callback failures are isolated from executor success/failure so the reporting layer cannot accidentally break the actual job.
+
+## Verification
+
+The communication-center tests cover:
+
+- lifecycle status emission;
+- serialized status/report transport;
+- periodic heartbeat;
+- terminal report persistence before transport;
+- multiple failed delivery attempts followed by recovery;
+- restart recovery of an undelivered persisted report.
 
 ## Remaining live-browser verification
 
