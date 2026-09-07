@@ -125,6 +125,25 @@ async function occupiedComposerIsRejectedCase(): Promise<void> {
   );
 }
 
+async function unreadableComposerFailsClosedCase(): Promise<void> {
+  const manager = Object.create(ConversationManager.prototype) as ConversationManager;
+  const input = {
+    async evaluate(): Promise<string> {
+      throw new Error("simulated DOM read failure");
+    },
+  };
+
+  const internal = manager as unknown as {
+    assertComposerEmpty(input: typeof input): Promise<void>;
+  };
+
+  await assert.rejects(
+    () => internal.assertComposerEmpty(input),
+    (error: unknown) =>
+      error instanceof Error && error.message === "simulated DOM read failure",
+  );
+}
+
 async function failedOwnedDraftCanBeCleanedCase(): Promise<void> {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
   let cleared = false;
@@ -217,6 +236,7 @@ async function run(): Promise<void> {
   await matchingUserMessageConfirmsCase();
   await unrelatedMessageMustNotFalseConfirmCase();
   await occupiedComposerIsRejectedCase();
+  await unreadableComposerFailsClosedCase();
   await failedOwnedDraftCanBeCleanedCase();
   await kapIdIsSubmissionSignatureCase();
   await outboundMessagesAreSerializedCase();
