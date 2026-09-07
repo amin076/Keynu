@@ -4,6 +4,7 @@ export type KapMessageType =
   | "MISSION_BOOTSTRAP"
   | "MISSION_ACK"
   | "JOB"
+  | "JOB_STATUS"
   | "REPORT"
   | "ERROR"
   | "CONTROL"
