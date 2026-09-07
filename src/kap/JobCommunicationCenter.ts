@@ -4,7 +4,6 @@ import type { KapEnvelope } from "./KapEnvelope.js";
 import {
   PersistentJobStore,
   type StoredJob,
-  type StoredJobState,
 } from "../runtime/PersistentJobStore.js";
 
 export const DEFAULT_JOB_HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
@@ -22,6 +21,8 @@ export type JobLifecycleStage =
   | "STEP_FAILED"
   | "STEP_SKIPPED"
   | "HEARTBEAT"
+  | "STATUS_DELIVERED"
+  | "STATUS_DELIVERY_FAILED"
   | "REPORT_PERSISTED"
   | "REPORT_DELIVERY_ATTEMPT"
   | "REPORT_DELIVERED"
@@ -98,6 +99,7 @@ export class JobCommunicationCenter {
   private readonly auditPath: string;
   private readonly jobStore: PersistentJobStore;
   private readonly runtime = new Map<string, JobRuntimeState>();
+  private deliveryChain: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly sendMessage: (message: string) => Promise<void>,
@@ -125,7 +127,13 @@ export class JobCommunicationCenter {
       lastStatusSentAt: 0,
       heartbeatInFlight: false,
     });
-    await this.recordAndNotify(kap, "RECEIVED", "KAP job received by Keynu.", undefined, true);
+    await this.recordAndNotify(
+      kap,
+      "RECEIVED",
+      "KAP job received by Keynu.",
+      undefined,
+      true,
+    );
   }
 
   async analyzed(
@@ -193,7 +201,8 @@ export class JobCommunicationCenter {
     await this.record(
       kap,
       status,
-      message ?? (status === "COMPLETED" ? "KAP job completed." : "KAP job failed."),
+      message ??
+        (status === "COMPLETED" ? "KAP job completed." : "KAP job failed."),
     );
   }
 
@@ -205,7 +214,11 @@ export class JobCommunicationCenter {
   ): Promise<TerminalReportDeliveryResult> {
     this.stopHeartbeat(kap.id);
     await this.jobStore.recordReport(kap.id, state, reportText, reportId);
-    await this.record(kap, "REPORT_PERSISTED", "Terminal KAP report persisted before delivery.");
+    await this.record(
+      kap,
+      "REPORT_PERSISTED",
+      "Terminal KAP report persisted before delivery.",
+    );
 
     return this.deliverPersistedReport(kap, await this.jobStore.get(kap.id));
   }
@@ -251,7 +264,7 @@ export class JobCommunicationCenter {
       );
 
       try {
-        await this.sendMessage(record.reportText);
+        await this.sendSerialized(record.reportText);
         await this.jobStore.markReportDelivered(record.jobId);
         await this.record(
           kap,
@@ -384,15 +397,37 @@ export class JobCommunicationCenter {
     };
 
     try {
-      await this.sendMessage(wrapKap(envelope));
+      await this.sendSerialized(wrapKap(envelope));
       state.lastStatusSentAt = Date.now();
+      await this.record(
+        kap,
+        "STATUS_DELIVERED",
+        `Non-terminal ${stage} status was submitted successfully.`,
+        { statusStage: stage },
+      );
     } catch (error) {
       await this.record(
         kap,
-        "REPORT_DELIVERY_FAILED",
+        "STATUS_DELIVERY_FAILED",
         "Non-terminal status delivery failed; execution will continue.",
-        { stage, error: describeError(error) },
+        { statusStage: stage, error: describeError(error) },
       );
+    }
+  }
+
+  private async sendSerialized(message: string): Promise<void> {
+    let release: (() => void) | undefined;
+    const previous = this.deliveryChain;
+    this.deliveryChain = new Promise<void>((resolvePromise) => {
+      release = resolvePromise;
+    });
+
+    await previous.catch(() => undefined);
+
+    try {
+      await this.sendMessage(message);
+    } finally {
+      release?.();
     }
   }
 
