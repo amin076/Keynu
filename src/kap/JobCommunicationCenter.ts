@@ -146,7 +146,7 @@ export class JobCommunicationCenter {
       "ANALYZED",
       "KAP job validated and analyzed; execution plan accepted.",
       details,
-      true,
+      false,
     );
   }
 
@@ -158,7 +158,7 @@ export class JobCommunicationCenter {
       "STARTED",
       "KAP job execution started.",
       undefined,
-      true,
+      false,
     );
     this.startHeartbeat(kap);
   }
@@ -363,8 +363,6 @@ export class JobCommunicationCenter {
     const shouldSend =
       force ||
       stage === "RECEIVED" ||
-      stage === "ANALYZED" ||
-      stage === "STARTED" ||
       stage === "HEARTBEAT" ||
       stage === "STEP_FAILED" ||
       now - state.lastStatusQueuedAt >= this.statusMinIntervalMs;
@@ -404,8 +402,9 @@ export class JobCommunicationCenter {
 
     // Non-terminal telemetry must never delay or determine executor success.
     // It is queued on the single browser transport lane and audited when that
-    // transport eventually succeeds or fails. The final REPORT awaits this
-    // lane, preserving message ordering without blocking execution startup.
+    // transport eventually succeeds or fails. ANALYZED/STARTED and ordinary
+    // rapid step transitions remain durable in audit but are chat-throttled so
+    // they cannot create a burst of assistant turns before the final REPORT.
     this.enqueueStatusDelivery(kap, stage, wrapKap(envelope));
   }
 
