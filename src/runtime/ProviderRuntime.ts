@@ -14,6 +14,32 @@ export type ProviderRuntimeOptions = {
   runtimeDispatcher?: RuntimeDispatcher;
 };
 
+function createBrowserIgnoredItem(
+  response: ProviderResponse,
+  reason: string,
+): RuntimeResult['items'][number] {
+  return {
+    status: 'SKIPPED',
+    action: 'UNHANDLED',
+    envelope: {
+      protocol: 'KAP',
+      version: '1.0',
+      type: 'IGNORED',
+      id: `ignored-${response.id}`,
+      createdAt: new Date().toISOString(),
+      payload: {
+        reason,
+        source: 'browser-agent',
+      },
+    },
+    message: reason,
+    metadata: {
+      ignored: true,
+      source: 'browser-agent',
+    },
+  };
+}
+
 export class ProviderRuntime {
   private readonly responseInterpreter: ResponseInterpreter;
   private readonly kapInterpreter: KapInterpreter;
@@ -50,16 +76,25 @@ export class ProviderRuntime {
     const errors = [...kap.errors];
 
     if (kap.blocks.length === 0) {
+      const browserItems = executionContext.source === 'browser-agent'
+        ? [createBrowserIgnoredItem(
+            response,
+            'Browser assistant message contained no KAP block and was ignored without requesting recovery.',
+          )]
+        : [];
+
       events.push({
         type: 'runtime.completed',
-        message: 'Provider response contained no KAP blocks.',
+        message: executionContext.source === 'browser-agent'
+          ? 'Browser assistant message contained no KAP blocks and was safely ignored.'
+          : 'Provider response contained no KAP blocks.',
       });
 
       return {
         status: 'SKIPPED',
         providerResponse: response,
         text: interpreted.text,
-        items: [],
+        items: browserItems,
         events,
         errors,
       };
@@ -73,7 +108,7 @@ export class ProviderRuntime {
       },
     });
 
-    const items = [];
+    const items: RuntimeResult['items'] = [];
 
     for (const validation of this.kapValidator.validateAll(kap.blocks)) {
       if (!validation.valid) {
@@ -110,6 +145,20 @@ export class ProviderRuntime {
         envelope: dispatched.envelope,
         blockId: dispatched.blockId,
         metadata: dispatched.metadata,
+      });
+    }
+
+    if (items.length === 0 && executionContext.source === 'browser-agent') {
+      const ignored = createBrowserIgnoredItem(
+        response,
+        'Browser assistant message contained no valid KAP envelope and was ignored without requesting recovery.',
+      );
+      items.push(ignored);
+      events.push({
+        type: 'dispatch.skipped',
+        message: ignored.message ?? 'Invalid browser protocol response ignored.',
+        envelope: ignored.envelope,
+        metadata: ignored.metadata,
       });
     }
 
