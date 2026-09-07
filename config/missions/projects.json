@@ -4,8 +4,7 @@
     {
       "id": "keynu",
       "name": "Keynu",
-      "root": ".",
-      "activeMissionId": "runtime-readiness-melakat"
+      "root": "."
     },
     {
       "id": "melakat",

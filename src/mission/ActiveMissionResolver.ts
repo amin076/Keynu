@@ -64,7 +64,17 @@ export class ActiveMissionResolver {
   }
 
   resolve(options: ResolveActiveMissionOptions = {}): ActiveMissionResolution {
-    const configured = this.readConfiguredMission(options.projectId);
+    let preferredProjectId = options.projectId;
+
+    if (!preferredProjectId) {
+      try {
+        preferredProjectId = this.stateStore.read().activeProjectId;
+      } catch {
+        // Persisted-state validation below will surface the state error.
+      }
+    }
+
+    const configured = this.readConfiguredMission(preferredProjectId);
 
     if (configured.blocked) {
       return configured.resolution;
