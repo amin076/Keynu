@@ -73,6 +73,8 @@ export const KapJobStatusSchema = z.object({
         "STEP_FAILED",
         "STEP_SKIPPED",
         "HEARTBEAT",
+        "STATUS_DELIVERED",
+        "STATUS_DELIVERY_FAILED",
         "REPORT_PERSISTED",
         "REPORT_DELIVERY_ATTEMPT",
         "REPORT_DELIVERED",
