@@ -43,9 +43,29 @@ export function createIsolatedMissionManager(): IsolatedMissionManagerFixture {
 
   // Local runtime state under .keynu is deliberately not repository source
   // truth and may be absent in a clean checkout/CI runner. Tests create their
-  // own deterministic state and memory instead of copying a developer's live
-  // machine state.
+  // own deterministic state, project routing, and memory instead of inheriting
+  // the developer machine's currently active cross-project mission.
   mkdirSync(join(root, ".keynu", "missions"), { recursive: true });
+  writeFileSync(
+    join(root, ".keynu", "missions", "projects.json"),
+    JSON.stringify(
+      {
+        version: "1.0",
+        projects: [
+          {
+            id: "keynu",
+            name: "Keynu",
+            root: ".",
+            activeMissionId: "runtime-readiness-melakat",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
   const memoryRoot = join(root, ".keynu", "memory");
   mkdirSync(memoryRoot, { recursive: true });
   for (const name of REQUIRED_MEMORY_FILES) {
