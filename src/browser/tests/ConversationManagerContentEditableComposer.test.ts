@@ -23,15 +23,24 @@ try {
             <button type="submit" data-testid="send-button">Send</button>
           </form>
           <div id="submitted-message"></div>
+          <div id="conversation"></div>
         </main>
         <script>
           const form = document.querySelector('#composer-form');
           const composer = document.querySelector('#prompt-textarea');
           const submitted = document.querySelector('#submitted-message');
+          const conversation = document.querySelector('#conversation');
 
           form.addEventListener('submit', (event) => {
             event.preventDefault();
-            submitted.textContent = composer.textContent || '';
+            const text = composer.textContent || '';
+            submitted.textContent = text;
+
+            const userMessage = document.createElement('div');
+            userMessage.setAttribute('data-message-author-role', 'user');
+            userMessage.textContent = text;
+            conversation.appendChild(userMessage);
+
             composer.textContent = '';
             composer.dispatchEvent(new InputEvent('input', { bubbles: true }));
           });
@@ -45,6 +54,10 @@ try {
 
   assert.equal(
     await page.locator("#submitted-message").textContent(),
+    "contenteditable composer verification",
+  );
+  assert.equal(
+    await page.locator('[data-message-author-role="user"]').textContent(),
     "contenteditable composer verification",
   );
   assert.equal(
