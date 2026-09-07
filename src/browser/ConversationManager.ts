@@ -3,7 +3,6 @@ import { ConversationLocator } from "./ConversationLocator.js";
 import type { BrowserConversationState } from "./ConversationState.js";
 import type { AssistantMessageSnapshot } from "./AssistantMessageSnapshot.js";
 
-
 const CHATGPT_COMPOSER_SELECTOR = [
   '[data-testid="composer-text-input"]:visible',
   '#prompt-textarea:visible',
@@ -15,9 +14,22 @@ const CHATGPT_COMPOSER_SELECTOR = [
   'textarea:visible',
 ].join(', ');
 
+const CHATGPT_SEND_BUTTON_SELECTOR = [
+  'button[data-testid="send-button"]',
+  'form button[aria-label="Send"]',
+  'form button[aria-label="Send prompt"]',
+  'form button[aria-label="Send message"]',
+  'form button[type="submit"]',
+].join(', ');
+
+function normalizeVisibleText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 export class ConversationManager {
   private state: BrowserConversationState = "idle";
   private readonly locator: ConversationLocator;
+  private outboundChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly page: Page) {
     this.locator = new ConversationLocator(page);
@@ -64,18 +76,15 @@ export class ConversationManager {
         id,
         text,
       };
-
     } catch {
       return null;
     }
   }
 
-
   async waitForStableAssistantMessage(
     afterMessageId: string | null,
     stableMs = 1500,
   ): Promise<AssistantMessageSnapshot> {
-
     if (this.page.isClosed()) {
       throw new Error("Browser page is closed.");
     }
@@ -83,93 +92,60 @@ export class ConversationManager {
     return this.page.evaluate(
       ({ afterMessageId, stableMs }) =>
         new Promise<AssistantMessageSnapshot>((resolve) => {
-
           const selector =
             '[data-message-author-role="assistant"][data-message-id]';
 
           let candidateId: string | null = null;
           let candidateText = "";
-
           let timer: ReturnType<typeof setTimeout> | null = null;
-
 
           const cleanup = () => {
             observer.disconnect();
-
             if (timer) {
               clearTimeout(timer);
             }
           };
 
-
           const inspect = () => {
-
-            const messages =
-              Array.from(
-                document.querySelectorAll<HTMLElement>(selector),
-              );
-
-
+            const messages = Array.from(
+              document.querySelectorAll<HTMLElement>(selector),
+            );
             const latest = messages.at(-1);
 
             if (!latest) {
               return;
             }
 
-
-            const id =
-              latest.getAttribute("data-message-id");
-
-            const text =
-              latest.textContent ?? "";
-
+            const id = latest.getAttribute("data-message-id");
+            const text = latest.textContent ?? "";
 
             if (!id || id === afterMessageId || !text.trim()) {
               return;
             }
 
-
-            if (
-              id !== candidateId ||
-              text !== candidateText
-            ) {
-
+            if (id !== candidateId || text !== candidateText) {
               candidateId = id;
               candidateText = text;
-
 
               if (timer) {
                 clearTimeout(timer);
               }
 
-
               timer = setTimeout(() => {
-
                 cleanup();
-
-                resolve({
-                  id,
-                  text,
-                });
-
+                resolve({ id, text });
               }, stableMs);
             }
           };
 
-
-          const observer =
-            new MutationObserver(inspect);
-
-
+          const observer = new MutationObserver(inspect);
           observer.observe(document.body, {
             childList: true,
             subtree: true,
             characterData: true,
           });
 
-
           inspect();
-
         }),
       {
         afterMessageId,
@@ -179,11 +155,28 @@ export class ConversationManager {
   }
 
   async sendMessage(message: string): Promise<void> {
+    const run = this.outboundChain
+      .catch(() => undefined)
+      .then(() => this.sendMessageOnce(message));
+
+    // Keep one global conversation-level transport lane so status, report,
+    // continuation and reminder senders cannot write into the composer at the
+    // same time. A failed send must not poison later sends.
+    this.outboundChain = run.catch(() => undefined);
+    return run;
+  }
+
+  private async sendMessageOnce(message: string): Promise<void> {
     const input = await this.getMessageInput();
-    const messageCountBeforeSubmit = await this.page
-      .locator("[data-message-author-role]")
+    await this.assertComposerEmpty(input);
+
+    const userMessages = this.page.locator(
+      '[data-message-author-role="user"]',
+    );
+    const userMessageCountBeforeSubmit = await userMessages
       .count()
       .catch(() => 0);
+    const signature = this.submissionSignature(message);
 
     await input.click({
       force: true,
@@ -191,95 +184,55 @@ export class ConversationManager {
 
     await this.page.keyboard.insertText(message);
     await this.page.waitForTimeout(300);
-    await this.submitMessage(input);
-    await this.confirmMessageSubmitted(input, messageCountBeforeSubmit);
 
-    this.state = "ready";
+    try {
+      await this.submitMessage(input);
+      await this.confirmMessageSubmitted(
+        userMessageCountBeforeSubmit,
+        signature,
+      );
+      this.state = "ready";
+    } catch (error) {
+      await this.cleanupOwnedDraft(input, message, signature);
+      this.state = "error";
+      throw error;
+    }
   }
 
   private async confirmMessageSubmitted(
-    input: Locator,
-    messageCountBeforeSubmit: number,
+    userMessageCountBeforeSubmit: number,
+    signature: string,
   ): Promise<void> {
     const timeoutMs = 12000;
     const pollIntervalMs = 200;
     const deadline = Date.now() + timeoutMs;
-    const submitButton = this.page
-      .locator(
-        'button[data-testid="send-button"], button[aria-label*="Send"], form button[type="submit"]',
-      )
-      .last();
-
-    let busyStateObserved = false;
+    const normalizedSignature = normalizeVisibleText(signature);
 
     while (Date.now() < deadline) {
-      const composerIsEmpty = await input
-        .evaluate((element) => {
-          if (
-            element instanceof HTMLInputElement ||
-            element instanceof HTMLTextAreaElement
-          ) {
-            return element.value.trim().length === 0;
-          }
-
-          if (element instanceof HTMLElement) {
-            return (
-              element.innerText ??
-              element.textContent ??
-              ""
-            ).trim().length === 0;
-          }
-
-          return false;
-        })
-        .catch(() => false);
-
-      if (composerIsEmpty) {
-        return;
-      }
-
-      const currentMessageCount = await this.page
-        .locator("[data-message-author-role]")
+      const userMessages = this.page.locator(
+        '[data-message-author-role="user"]',
+      );
+      const currentCount = await userMessages
         .count()
-        .catch(() => messageCountBeforeSubmit);
+        .catch(() => userMessageCountBeforeSubmit);
 
-      if (currentMessageCount > messageCountBeforeSubmit) {
-        return;
-      }
+      if (currentCount > userMessageCountBeforeSubmit) {
+        for (
+          let index = userMessageCountBeforeSubmit;
+          index < currentCount;
+          index += 1
+        ) {
+          const text = await userMessages
+            .nth(index)
+            .textContent()
+            .catch(() => null);
 
-      const buttonExists =
-        (await submitButton.count().catch(() => 0)) > 0;
-
-      if (buttonExists) {
-        const buttonIsBusy = await submitButton
-          .evaluate((element) => {
-            if (!(element instanceof HTMLElement)) {
-              return false;
-            }
-
-            const ariaDisabled =
-              element.getAttribute("aria-disabled") === "true";
-            const disabled =
-              element instanceof HTMLButtonElement && element.disabled;
-            const state = [
-              element.getAttribute("data-state") ?? "",
-              element.getAttribute("aria-label") ?? "",
-            ]
-              .join(" ")
-              .toLowerCase();
-
-            return (
-              ariaDisabled ||
-              disabled ||
-              /stop|busy|loading|generating/.test(state)
-            );
-          })
-          .catch(() => false);
-
-        if (buttonIsBusy) {
-          busyStateObserved = true;
-        } else if (busyStateObserved) {
-          return;
+          if (
+            text &&
+            normalizeVisibleText(text).includes(normalizedSignature)
+          ) {
+            return;
+          }
         }
       }
 
@@ -287,8 +240,87 @@ export class ConversationManager {
     }
 
     throw new Error(
-      "ChatGPT message submission could not be confirmed.",
+      `ChatGPT message submission could not be confirmed by a matching user message (${signature}).`,
     );
+  }
+
+  private async assertComposerEmpty(input: Locator): Promise<void> {
+    const composerText = await this.readComposerText(input);
+    if (composerText.length === 0) {
+      return;
+    }
+
+    throw new Error(
+      "ChatGPT composer is occupied; Keynu refused to append to or overwrite an existing draft.",
+    );
+  }
+
+  private async readComposerText(input: Locator): Promise<string> {
+    return input
+      .evaluate((element) => {
+        if (
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLTextAreaElement
+        ) {
+          return element.value;
+        }
+
+        if (element instanceof HTMLElement) {
+          return element.innerText ?? element.textContent ?? "";
+        }
+
+        return "";
+      })
+      .then((text) => normalizeVisibleText(String(text ?? "")))
+      .catch(() => "");
+  }
+
+  private submissionSignature(message: string): string {
+    const kapId = message.match(/"id"\s*:\s*"([^"]+)"/)?.[1];
+    if (kapId) {
+      return kapId;
+    }
+
+    const normalized = normalizeVisibleText(message)
+      .replace(/```(?:kap)?/gi, "")
+      .trim();
+
+    return normalized.slice(0, 96) || "Keynu outbound message";
+  }
+
+  private async cleanupOwnedDraft(
+    input: Locator,
+    message: string,
+    signature: string,
+  ): Promise<void> {
+    const current = await this.readComposerText(input);
+    if (!current) {
+      return;
+    }
+
+    const normalizedMessage = normalizeVisibleText(message);
+    const ownsDraft =
+      current === normalizedMessage ||
+      current.includes(normalizeVisibleText(signature));
+
+    if (!ownsDraft) {
+      return;
+    }
+
+    const cleared = await input
+      .fill("")
+      .then(() => true)
+      .catch(() => false);
+
+    if (cleared) {
+      return;
+    }
+
+    await input.click({ force: true }).catch(() => undefined);
+    await this.page.keyboard
+      .press(process.platform === "darwin" ? "Meta+A" : "Control+A")
+      .catch(() => undefined);
+    await this.page.keyboard.press("Backspace").catch(() => undefined);
   }
 
   private async getMessageInput(): Promise<Locator> {
@@ -317,78 +349,58 @@ export class ConversationManager {
     }
   }
 
-
   private async submitMessage(input: Locator): Promise<void> {
+    const sendButton = this.page
+      .locator(CHATGPT_SEND_BUTTON_SELECTOR)
+      .last();
 
-    const sendButton =
-      this.page
-        .locator(
-          'button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send message"]',
-        )
-        .last();
-
-
-    if ((await sendButton.count()) > 0) {
-
+    if ((await sendButton.count().catch(() => 0)) > 0) {
       try {
-
         await sendButton.waitFor({
           state: "visible",
           timeout: 5000,
         });
 
-
         for (let attempt = 0; attempt < 20; attempt += 1) {
+          const disabled = await sendButton
+            .evaluate((button) => {
+              if (button instanceof HTMLButtonElement) {
+                return button.disabled;
+              }
 
-          const disabled =
-            await sendButton
-              .evaluate((button) => {
-
-                if (button instanceof HTMLButtonElement) {
-                  return button.disabled;
-                }
-
-                return (
-                  button.getAttribute("disabled") !== null ||
-                  button.getAttribute("aria-disabled") === "true"
-                );
-
-              })
-              .catch(() => true);
-
+              return (
+                button.getAttribute("disabled") !== null ||
+                button.getAttribute("aria-disabled") === "true"
+              );
+            })
+            .catch(() => true);
 
           if (!disabled) {
-
             await sendButton.click({
               force: true,
               timeout: 5000,
               noWaitAfter: true,
             });
-
-
-            await this.page.waitForTimeout(500);
-
+            await this.page.waitForTimeout(250);
             return;
           }
 
-
           await this.page.waitForTimeout(250);
         }
-
-      } catch {}
+      } catch {
+        // Fall through to keyboard submission. Confirmation remains strict and
+        // will reject the send if no matching user-authored DOM message appears.
+      }
     }
-
 
     await input
       .press("Enter")
       .catch(async () => {
-
         await input.press(
           process.platform === "darwin"
             ? "Meta+Enter"
             : "Control+Enter",
         );
-
       });
   }
 }
