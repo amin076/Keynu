@@ -17,33 +17,36 @@ BrowserAgent
   ▼
 Executor / Driver
   │
-  │  potentially silent for the entire job
-  │
+  │ potentially silent for the entire job
   ▼
 Final REPORT
-  │ one browser send attempt
+  │ weak browser send confirmation
   ▼
 ChatGPT
-  │
-  └─ continuation starts only after the report
 ```
 
-This design had five operational gaps:
+The original design had five operational gaps:
 
 1. no immediate receipt acknowledgement;
-2. no analyzed/started lifecycle messages;
+2. no analyzed/started lifecycle record;
 3. no per-step progress or long-running heartbeat;
-4. report delivery was effectively one-shot and delivery failure could be confused with execution failure;
+4. report delivery was effectively one-shot and weak submission heuristics could confuse an unrelated DOM change with successful delivery;
 5. no independent durable communication audit or startup recovery of persisted undelivered reports.
 
-## After
+## Hardened architecture
 
 ```text
                          ┌──────────────────────────────────┐
-ChatGPT ── KAP JOB ─────►│ JobCommunicationCenter           │
-                         │ receive / analyze / lifecycle    │
-                         │ durable audit / heartbeat        │
-                         │ serialized outbound delivery     │
+ChatGPT ── KAP JOB ─────►│ BrowserAgent                     │
+                         │ validate / claim                  │
+                         └──────────────┬───────────────────┘
+                                        │
+                                        ▼
+                         ┌──────────────────────────────────┐
+                         │ JobCommunicationCenter           │
+                         │ durable lifecycle audit          │
+                         │ non-blocking status queue        │
+                         │ terminal report persistence      │
                          └──────────────┬───────────────────┘
                                         │
                               execution + progress callback
@@ -52,65 +55,105 @@ ChatGPT ── KAP JOB ─────►│ JobCommunicationCenter           �
                          │ Executor / Driver                │
                          │ PowerShell / filesystem / runtime│
                          └──────────────┬───────────────────┘
-                                        │ step events + result
+                                        │
                                         ▼
                          ┌──────────────────────────────────┐
-                         │ JobCommunicationCenter           │
-                         │ persist terminal report first    │
-                         │ retry delivery / recover restart │
+                         │ ConversationManager              │
+                         │ one global outbound lane         │
+                         │ occupied-composer protection     │
+                         │ strict DOM delivery proof        │
                          └──────────────┬───────────────────┘
                                         │
-             RECEIVED / ANALYZED / STARTED / STEP / HEARTBEAT / REPORT
+                        RECEIVED / HEARTBEAT / FAILURE / REPORT
                                         ▼
                                      ChatGPT
-                                        │
-                                        ▼
-                               Mission continuation
 ```
+
+The main separation is:
+
+```text
+Execution != Reporting != Browser Transport != Audit
+```
+
+A slow or broken browser transport must not delay or change executor success.
 
 ## Lifecycle protocol
 
-Keynu now supports non-terminal `KAP JOB_STATUS` telemetry in addition to the existing terminal `KAP REPORT`/`ERROR` contract.
+Keynu supports non-terminal `KAP JOB_STATUS` telemetry in addition to terminal `KAP REPORT`/`ERROR` messages.
 
 Lifecycle stages:
 
-- `RECEIVED` — Keynu has accepted the KAP job.
+- `RECEIVED` — Keynu accepted the KAP job.
 - `ANALYZED` — the envelope was validated and the execution plan was accepted.
-- `STARTED` — side-effecting execution is beginning.
-- `STEP_STARTED` — a driver operation has begun.
+- `STARTED` — execution is beginning.
+- `STEP_STARTED` — a driver operation began.
 - `STEP_COMPLETED` — a driver operation completed successfully.
 - `STEP_FAILED` — a driver operation failed.
 - `STEP_SKIPPED` — fail-fast policy skipped an operation.
 - `HEARTBEAT` — the job is still running.
-- `STATUS_DELIVERED` — a non-terminal status submission succeeded.
-- `STATUS_DELIVERY_FAILED` — a non-terminal status submission failed without failing execution.
+- `STATUS_DELIVERED` — a non-terminal status was confirmed by the conversation transport.
+- `STATUS_DELIVERY_FAILED` — non-terminal transport failed without failing execution.
 - `REPORT_PERSISTED` — terminal report is durable before transport.
 - `REPORT_DELIVERY_ATTEMPT` — delivery retry accounting.
-- `REPORT_DELIVERED` — browser submission layer confirmed report submission.
-- `REPORT_DELIVERY_FAILED` — a terminal report delivery attempt failed.
+- `REPORT_DELIVERED` — the browser conversation contains a new user-authored message matching the outbound report id/signature.
+- `REPORT_DELIVERY_FAILED` — a terminal report delivery attempt failed confirmation.
 - `COMPLETED` / `FAILED` — terminal execution state in the audit stream.
 
 A `JOB_STATUS` message is telemetry only. It carries `requiresResponse: false` and instructs the receiving AI not to issue a replacement job before a terminal report/error.
 
-## Timing policy
+## Chat-facing timing policy
+
+Not every audited transition should create a ChatGPT turn. A live browser test showed that rapidly sending `RECEIVED`, `ANALYZED`, and `STARTED` into the same conversation creates unnecessary assistant traffic and can contend with the final report.
 
 Default policy:
 
-| Signal | Default |
-| --- | --- |
-| `RECEIVED` | immediate |
-| `ANALYZED` | immediate |
-| `STARTED` | immediate |
-| step events | always audited; chat delivery throttled to avoid noise |
-| ordinary status minimum chat interval | 30 seconds |
-| heartbeat | every 2 minutes |
-| stall warning | after 5 minutes without a step transition |
-| terminal report delivery attempts | 5 |
-| terminal retry delays | 1s, 3s, 10s, 30s |
+| Signal | Durable audit | Chat delivery |
+| --- | --- | --- |
+| `RECEIVED` | immediate | immediate |
+| `ANALYZED` | immediate | throttled |
+| `STARTED` | immediate | throttled |
+| ordinary step transitions | immediate | throttled |
+| `STEP_FAILED` | immediate | immediate eligibility |
+| heartbeat | immediate when due | every 2 minutes while running |
+| stall warning | immediate when due | after 5 minutes without a step transition |
+| terminal report | persisted first | strictly confirmed with retries |
 
-Failures are not hidden by throttling. A `STEP_FAILED` status is eligible for immediate delivery.
+The ordinary minimum chat interval is 30 seconds. This keeps detailed lifecycle information in `.keynu/state/job-communications.jsonl` without forcing multiple rapid ChatGPT turns.
 
-All outbound lifecycle and terminal messages pass through one serialized communication lane. This prevents a heartbeat, step transition, and final report from trying to use the browser composer concurrently. Serialization is transport coordination only; executor work and the durable audit remain independent.
+Non-terminal status delivery is queued asynchronously. `received()`, `analyzed()`, `started()`, and progress recording return after durable audit work rather than waiting for the browser composer. Terminal reports still wait for the serialized transport lane so message ordering remains deterministic.
+
+## ConversationManager transport guarantees
+
+All callers share one conversation-level outbound lane. Status, report, continuation, and reminder senders cannot type into the composer concurrently.
+
+Before typing, `ConversationManager` reads the live composer and fails closed unless it can verify that the composer is empty. It never appends to or overwrites an existing user or stale Keynu draft.
+
+Submission uses one consistent send-button selector set, including the current ChatGPT `aria-label="Send"` form, with keyboard submission only as a fallback.
+
+Delivery confirmation is intentionally strict. Success requires a **new user-authored DOM message** whose text contains the outbound KAP id or derived message signature. The following are no longer sufficient proof by themselves:
+
+- total message count increased;
+- an assistant message appeared;
+- the composer became empty;
+- the send button changed busy/ready state.
+
+If confirmation fails, Keynu only clears the draft when it can identify the remaining composer text as its own outbound message. It does not clear unrelated user text.
+
+## Non-KAP assistant messages
+
+Ordinary ChatGPT prose is not a protocol failure. Browser-origin ProviderRuntime calls translate responses with no valid KAP envelope into an internal `IGNORED` / `UNHANDLED` dispatch. `BrowserAgent` therefore records the message as handled and waits for the next assistant message without sending a recovery prompt.
+
+This prevents the feedback loop:
+
+```text
+normal assistant prose
+  -> automatic recovery prompt
+  -> assistant response
+  -> automatic recovery prompt
+  -> ...
+```
+
+Generic non-browser `ProviderRuntime` callers keep their previous no-KAP behavior.
 
 ## Durable state
 
@@ -135,18 +178,19 @@ verification
 persist REPORT
    │
    ▼
-delivery attempt ──failed──► retry accounting ──► retry
-   │ success
-   ▼
-mark delivered
+delivery attempt
    │
-   ▼
-mission continuation
+   ├─ no matching user DOM message -> failure accounting -> retry
+   │
+   └─ matching user DOM message -> mark delivered
+                                      │
+                                      ▼
+                             mission continuation
 ```
 
-A transport failure does not rewrite a successful execution as a failed execution. The report remains persisted and can be delivered again.
+A transport failure does not rewrite a successful execution as failed. The report remains persisted and can be delivered again.
 
-At BrowserAgent startup, `recoverUndeliveredReports()` searches durable state and retries any terminal reports that were persisted but never marked delivered. Duplicate KAP jobs also use this recovery path instead of re-running side effects.
+At BrowserAgent startup, `recoverUndeliveredReports()` searches durable state and retries any terminal reports that were persisted but never marked delivered. Duplicate KAP jobs use the recovery path instead of re-running side effects.
 
 ## Driver integration
 
@@ -162,17 +206,42 @@ Filesystem routing reports start/completion/failure. Generic runtime results are
 
 Progress callback failures are isolated from executor success/failure so the reporting layer cannot accidentally break the actual job.
 
-## Verification
+## Live-browser incident that drove hardening
 
-The communication-center tests cover:
+During the 2026-09-07 smoke test, `job-keynu-read-project-memory-001` completed successfully, read all five requested memory files, passed verification, persisted its terminal report, and wrote `reportDeliveredAt`. The REPORT never appeared in ChatGPT.
 
-- lifecycle status emission;
-- serialized status/report transport;
-- periodic heartbeat;
+The audit also showed that the actual filesystem read job took about 187 ms, while synchronous status transport in the older implementation introduced roughly 12 seconds before the first execution step. A recovery message was subsequently left unsent in the ChatGPT composer, and ordinary assistant prose triggered repeated recovery prompts.
+
+These observations established three separate bugs: false-positive terminal delivery, transport/executor coupling, and a non-KAP recovery feedback loop.
+
+## Regression coverage
+
+The hardened tests cover:
+
+- lifecycle audit and heartbeat;
+- non-blocking status transport;
+- chat telemetry throttling after initial receipt;
 - terminal report persistence before transport;
-- multiple failed delivery attempts followed by recovery;
-- restart recovery of an undelivered persisted report.
+- delivery retry and restart recovery;
+- strict matching-user-message confirmation;
+- rejection of unrelated message-count changes;
+- occupied-composer protection;
+- fail-closed composer inspection;
+- Keynu-owned draft cleanup;
+- global outbound serialization;
+- ordinary and malformed browser prose safe-ignore behavior.
 
 ## Remaining live-browser verification
 
-CI can verify compilation, lifecycle state, retry persistence, driver progress callbacks, and integration contracts. It cannot fully reproduce a user's live ChatGPT browser session. After merge/deployment, a live KAP smoke job should confirm that the browser conversation visibly receives `RECEIVED`, `ANALYZED`, `STARTED`, periodic heartbeat/status, and the final terminal report in the expected order.
+CI cannot fully reproduce a user's live ChatGPT DOM. After merge and local rebuild/restart, a live KAP smoke job must verify:
+
+```text
+JOB
+ -> RECEIVED visible quickly
+ -> execution begins immediately
+ -> no recovery loop from ordinary assistant responses
+ -> final REPORT appears as a real user-authored ChatGPT message
+ -> processed-jobs.json records reportDeliveredAt only after that visible REPORT exists
+```
+
+Only after this live smoke passes should the browser reporting path be considered fully verified.
