@@ -1,9 +1,16 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runPowerShellPatchJob, type PowerShellPatchJob } from "./powershell-patch.js";
+import {
+  runPowerShellPatchJob,
+  type PowerShellPatchJob,
+  type PowerShellPatchRunOptions,
+} from "./powershell-patch.js";
 import { handleProcessManagerPayload } from "./process-manager/process-manager-adapter.js";
 
-export async function handlePowerShellKapJob(job: PowerShellPatchJob) {
+export async function handlePowerShellKapJob(
+  job: PowerShellPatchJob,
+  options: PowerShellPatchRunOptions = {},
+) {
   const processResult = await handleProcessManagerPayload((job as any).payload);
 
   if (processResult) {
@@ -22,7 +29,7 @@ export async function handlePowerShellKapJob(job: PowerShellPatchJob) {
     };
   }
 
-  const report = await runPowerShellPatchJob(job);
+  const report = await runPowerShellPatchJob(job, options);
   const cwd = job.payload.cwd;
   const reportDir = join(cwd, ".keynu", "powershell", "reports");
   mkdirSync(reportDir, { recursive: true });
