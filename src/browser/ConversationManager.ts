@@ -256,23 +256,22 @@ export class ConversationManager {
   }
 
   private async readComposerText(input: Locator): Promise<string> {
-    return input
-      .evaluate((element) => {
-        if (
-          element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement
-        ) {
-          return element.value;
-        }
+    const text = await input.evaluate((element) => {
+      if (
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        return element.value;
+      }
 
-        if (element instanceof HTMLElement) {
-          return element.innerText ?? element.textContent ?? "";
-        }
+      if (element instanceof HTMLElement) {
+        return element.innerText ?? element.textContent ?? "";
+      }
 
-        return "";
-      })
-      .then((text) => normalizeVisibleText(String(text ?? "")))
-      .catch(() => "");
+      throw new Error("Unsupported ChatGPT composer element.");
+    });
+
+    return normalizeVisibleText(String(text ?? ""));
   }
 
   private submissionSignature(message: string): string {
@@ -293,15 +292,16 @@ export class ConversationManager {
     message: string,
     signature: string,
   ): Promise<void> {
-    const current = await this.readComposerText(input);
+    const current = await this.readComposerText(input).catch(() => "");
     if (!current) {
       return;
     }
 
     const normalizedMessage = normalizeVisibleText(message);
+    const kapId = message.match(/"id"\s*:\s*"([^"]+)"/)?.[1];
     const ownsDraft =
       current === normalizedMessage ||
-      current.includes(normalizeVisibleText(signature));
+      Boolean(kapId && current.includes(normalizeVisibleText(signature)));
 
     if (!ownsDraft) {
       return;
