@@ -1,5 +1,6 @@
 import type { Runtime } from "../core/Runtime.js";
 import { createKapErrorReport } from "../kap/KapReport.js";
+import { JobCommunicationCenter } from "../kap/JobCommunicationCenter.js";
 import { routeKapJob } from "../runtime/kap-job-router.js";
 import { ProviderRuntime } from "../runtime/ProviderRuntime.js";
 import { PersistentJobStore, type StoredJobState } from "../runtime/PersistentJobStore.js";
@@ -46,6 +47,7 @@ export class BrowserAgent {
   private readonly jobStore = new PersistentJobStore();
   private readonly continuationCoordinator = new BrowserContinuationCoordinator();
   private readonly continuationReminderService: BrowserContinuationReminderService;
+  private readonly communicationCenter: JobCommunicationCenter;
 
   constructor(
     private readonly browser: BrowserDriver,
@@ -58,6 +60,13 @@ export class BrowserAgent {
         await this.browser.getConversation().sendMessage(message);
         console.log("[ReminderDebug] reminder message sent");
       },
+    );
+
+    this.communicationCenter = new JobCommunicationCenter(
+      async (message) => {
+        await this.browser.getConversation().sendMessage(message);
+      },
+      { jobStore: this.jobStore },
     );
   }
 
@@ -100,18 +109,6 @@ export class BrowserAgent {
     this.continuationReminderService.start();
   }
 
-  private async persistAndDeliverReport(
-    jobId: string,
-    state: "COMPLETED" | "FAILED" | "CANCELLED",
-    reportText: string,
-    reportId: string | undefined,
-    sendMessage: (message: string) => Promise<void>,
-  ): Promise<void> {
-    await this.jobStore.recordReport(jobId, state, reportText, reportId);
-    await sendMessage(reportText);
-    await this.jobStore.markReportDelivered(jobId);
-  }
-
   async start(): Promise<void> {
     const conversation = this.browser.getConversation();
     const watcher = this.browser.getWatcher();
@@ -121,16 +118,17 @@ export class BrowserAgent {
 
     console.log("[agent] BrowserAgent loop started.");
 
+    const recoveredReports =
+      await this.communicationCenter.recoverUndeliveredReports();
+    if (recoveredReports.length > 0) {
+      console.log(
+        `[agent] Recovered ${recoveredReports.length} previously undelivered terminal report(s).`,
+      );
+    }
+
     while (true) {
       const messageText = await watcher.waitForNewAssistantMessage();
 
-      /*
-       * Any assistant message proves that the assistant is alive.
-       *
-       * Cancellation intentionally happens before KAP extraction,
-       * validation, duplicate detection, acknowledgement handling, or any
-       * other message processing.
-       */
       console.log("[ReminderDebug] cancel() called");
       this.continuationReminderService.cancel();
 
@@ -223,11 +221,11 @@ export class BrowserAgent {
 
         if (stored.reportText) {
           if (!stored.reportDeliveredAt) {
-            await conversation.sendMessage(stored.reportText);
-            await this.jobStore.markReportDelivered(kap.id);
+            await this.communicationCenter.recoverUndeliveredReports();
           }
 
-          if (isTerminalJobState(stored.state)) {
+          const refreshed = await this.jobStore.get(kap.id);
+          if (isTerminalJobState(stored.state) && refreshed?.reportDeliveredAt) {
             await this.continueAfterReport(
               kap,
               stored.state,
@@ -248,40 +246,64 @@ export class BrowserAgent {
           await this.jobStore.markInterrupted(kap.id);
           const interruptedMessage =
             "KAP job was already claimed before this BrowserAgent process observed it, but no verified report was persisted. Automatic re-execution is blocked to avoid duplicate side effects.";
+          const errorResult = {
+            taskId: kap.id,
+            status: "FAILED",
+            startedAt: stored.updatedAt,
+            finishedAt: new Date().toISOString(),
+            durationMs: 0,
+            stepsRun: 0,
+            steps: [],
+            error: interruptedMessage,
+          } as any;
           const errorReport = createKapErrorReport(
             kap.id,
             interruptedMessage,
-            {
-              taskId: kap.id,
-              status: "FAILED",
-              startedAt: stored.updatedAt,
-              finishedAt: new Date().toISOString(),
-              durationMs: 0,
-              stepsRun: 0,
-              steps: [],
-              error: interruptedMessage,
-            } as any,
+            errorResult,
           );
-          await this.persistAndDeliverReport(
-            kap.id,
+
+          await this.communicationCenter.terminal(
+            kap,
+            "FAILED",
+            interruptedMessage,
+          );
+          const delivery = await this.communicationCenter.deliverTerminalReport(
+            kap,
             "FAILED",
             errorReport,
             `error-${kap.id}`,
-            sendMessage,
           );
-          await this.continueAfterReport(
-            kap,
-            "FAILED",
-            { nextAction: "evaluate_interrupted_job_without_reexecuting_side_effects" },
-            sendMessage,
-          );
+
+          if (delivery.delivered) {
+            await this.continueAfterReport(
+              kap,
+              "FAILED",
+              { nextAction: "evaluate_interrupted_job_without_reexecuting_side_effects" },
+              sendMessage,
+            );
+          }
         }
 
         await watcher.markFailed(messageText);
         continue;
       }
 
+      await this.communicationCenter.received(kap);
+      await this.communicationCenter.analyzed(kap, {
+        target: kap.payload?.target,
+        cwd: kap.payload?.cwd,
+        readCount: Array.isArray(kap.payload?.readFiles)
+          ? kap.payload.readFiles.length
+          : 0,
+        writeCount: Array.isArray(kap.payload?.writeFiles)
+          ? kap.payload.writeFiles.length
+          : 0,
+        commandCount: Array.isArray(kap.payload?.commands)
+          ? kap.payload.commands.length
+          : 0,
+      });
       await this.jobStore.set(kap.id, "RUNNING");
+      await this.communicationCenter.started(kap);
 
       const traceContext = {
         jobId: kap.id,
@@ -298,7 +320,11 @@ export class BrowserAgent {
         this.graphTracer.traceStarted(traceContext);
 
         if (target === "powershell" || target === "filesystem") {
-          const routedReport: any = await routeKapJob(kap);
+          const routedReport: any = await routeKapJob(kap, {
+            onProgress: async (event) => {
+              await this.communicationCenter.progress(kap, event);
+            },
+          });
           const routedPayload = routedReport?.payload ?? {};
           const rawResult = routedPayload.result ?? {};
           const now = new Date().toISOString();
@@ -365,13 +391,27 @@ export class BrowserAgent {
           };
           const reportText = serializeBrowserReport(certifiedReport);
 
-          await this.persistAndDeliverReport(
-            kap.id,
+          await this.communicationCenter.terminal(
+            kap,
+            status,
+            status === "COMPLETED"
+              ? "KAP job execution and verification completed."
+              : "KAP job execution or verification failed.",
+          );
+          const delivery = await this.communicationCenter.deliverTerminalReport(
+            kap,
             status,
             reportText,
             certifiedReport.id,
-            sendMessage,
           );
+
+          if (!delivery.delivered) {
+            console.error(
+              `[agent] Terminal report for ${kap.id} remains undelivered after ${delivery.attempts} attempts: ${delivery.lastError ?? "unknown delivery failure"}`,
+            );
+            await watcher.markFailed(messageText);
+            continue;
+          }
 
           await this.continueAfterReport(
             kap,
@@ -392,6 +432,18 @@ export class BrowserAgent {
 
         const task = kapJobToTask(kap);
         const result = await this.runtime.execute(task);
+
+        for (let index = 0; index < result.steps.length; index += 1) {
+          const step = result.steps[index];
+          await this.communicationCenter.progress(kap, {
+            stage: step.status === "COMPLETED" ? "COMPLETED" : "FAILED",
+            phase: "runtime",
+            index: index + 1,
+            total: result.steps.length,
+            name: JSON.stringify(step.command),
+            message: step.error,
+          });
+        }
 
         this.graphTracer.traceCompleted(traceContext, {
           status: result.status,
@@ -422,13 +474,21 @@ export class BrowserAgent {
           const reportText =
             "```kap\n" + JSON.stringify(reportEnvelope, null, 2) + "\n```";
 
-          await this.persistAndDeliverReport(
-            kap.id,
+          await this.communicationCenter.terminal(kap, "COMPLETED");
+          const delivery = await this.communicationCenter.deliverTerminalReport(
+            kap,
             "COMPLETED",
             reportText,
             reportEnvelope.id,
-            sendMessage,
           );
+
+          if (!delivery.delivered) {
+            console.error(
+              `[agent] Terminal report for ${kap.id} remains undelivered after ${delivery.attempts} attempts: ${delivery.lastError ?? "unknown delivery failure"}`,
+            );
+            await watcher.markFailed(messageText);
+            continue;
+          }
 
           await this.continueAfterReport(
             kap,
@@ -446,20 +506,26 @@ export class BrowserAgent {
             result,
           );
 
-          await this.persistAndDeliverReport(
-            kap.id,
+          await this.communicationCenter.terminal(
+            kap,
+            "FAILED",
+            result.error ?? "Runtime failed.",
+          );
+          const delivery = await this.communicationCenter.deliverTerminalReport(
+            kap,
             "FAILED",
             errorReport,
             `error-${kap.id}`,
-            sendMessage,
           );
 
-          await this.continueAfterReport(
-            kap,
-            "FAILED",
-            result,
-            sendMessage,
-          );
+          if (delivery.delivered) {
+            await this.continueAfterReport(
+              kap,
+              "FAILED",
+              result,
+              sendMessage,
+            );
+          }
 
           await watcher.markFailed(messageText);
         }
@@ -485,20 +551,26 @@ export class BrowserAgent {
           errorResult,
         );
 
-        await this.persistAndDeliverReport(
-          kap.id,
+        await this.communicationCenter.terminal(
+          kap,
+          "FAILED",
+          errorMessage,
+        );
+        const delivery = await this.communicationCenter.deliverTerminalReport(
+          kap,
           "FAILED",
           errorReport,
           `error-${kap.id}`,
-          sendMessage,
         );
 
-        await this.continueAfterReport(
-          kap,
-          "FAILED",
-          errorResult,
-          sendMessage,
-        );
+        if (delivery.delivered) {
+          await this.continueAfterReport(
+            kap,
+            "FAILED",
+            errorResult,
+            sendMessage,
+          );
+        }
 
         await watcher.markFailed(messageText);
       }
