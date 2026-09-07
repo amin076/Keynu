@@ -18,6 +18,15 @@ class FakeUserMessageLocator {
   }
 }
 
+type ComposerProbe = {
+  evaluate(...args: unknown[]): Promise<string>;
+};
+
+type CleanupComposerProbe = ComposerProbe & {
+  fill(value: string): Promise<void>;
+  click(options?: unknown): Promise<void>;
+};
+
 function createConfirmationHarness(
   totalCount: number,
   texts: Array<string | null>,
@@ -106,14 +115,14 @@ async function unrelatedMessageMustNotFalseConfirmCase(): Promise<void> {
 
 async function occupiedComposerIsRejectedCase(): Promise<void> {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
-  const input = {
+  const input: ComposerProbe = {
     async evaluate(): Promise<string> {
       return "unsent previous Keynu report";
     },
   };
 
   const internal = manager as unknown as {
-    assertComposerEmpty(input: typeof input): Promise<void>;
+    assertComposerEmpty(composer: ComposerProbe): Promise<void>;
   };
 
   await assert.rejects(
@@ -127,14 +136,14 @@ async function occupiedComposerIsRejectedCase(): Promise<void> {
 
 async function unreadableComposerFailsClosedCase(): Promise<void> {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
-  const input = {
+  const input: ComposerProbe = {
     async evaluate(): Promise<string> {
       throw new Error("simulated DOM read failure");
     },
   };
 
   const internal = manager as unknown as {
-    assertComposerEmpty(input: typeof input): Promise<void>;
+    assertComposerEmpty(composer: ComposerProbe): Promise<void>;
   };
 
   await assert.rejects(
@@ -147,7 +156,7 @@ async function unreadableComposerFailsClosedCase(): Promise<void> {
 async function failedOwnedDraftCanBeCleanedCase(): Promise<void> {
   const manager = Object.create(ConversationManager.prototype) as ConversationManager;
   let cleared = false;
-  const input = {
+  const input: CleanupComposerProbe = {
     async evaluate(): Promise<string> {
       return "```kap report-job-123 ```";
     },
@@ -167,7 +176,7 @@ async function failedOwnedDraftCanBeCleanedCase(): Promise<void> {
 
   const internal = manager as unknown as {
     cleanupOwnedDraft(
-      input: typeof input,
+      composer: CleanupComposerProbe,
       message: string,
       signature: string,
     ): Promise<void>;
