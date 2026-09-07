@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { JobCommunicationCenter } from "../JobCommunicationCenter.js";
 import { PersistentJobStore } from "../../runtime/PersistentJobStore.js";
 
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 const root = await mkdtemp(join(tmpdir(), "keynu-job-communication-"));
 
 try {
@@ -25,7 +29,8 @@ try {
     {
       cwd: root,
       jobStore: store,
-      heartbeatIntervalMs: 100000,
+      heartbeatIntervalMs: 8,
+      stallWarningMs: 12,
       statusMinIntervalMs: 0,
       reportDeliveryAttempts: 4,
       reportRetryDelaysMs: [1, 1, 1],
@@ -67,21 +72,27 @@ try {
     total: 2,
     name: "npm test",
   });
+
+  await sleep(28);
   await center.terminal(kap, "COMPLETED");
 
   const reportText = [
     "```kap",
-    JSON.stringify({
-      protocol: "KAP",
-      version: "1.0",
-      type: "REPORT",
-      id: `report-${kap.id}`,
-      createdAt: new Date().toISOString(),
-      payload: {
-        jobId: kap.id,
-        status: "COMPLETED",
+    JSON.stringify(
+      {
+        protocol: "KAP",
+        version: "1.0",
+        type: "REPORT",
+        id: `report-${kap.id}`,
+        createdAt: new Date().toISOString(),
+        payload: {
+          jobId: kap.id,
+          status: "COMPLETED",
+        },
       },
-    }, null, 2),
+      null,
+      2,
+    ),
     "```",
   ].join("\n");
 
@@ -107,6 +118,7 @@ try {
   assert(sent.some((message) => message.includes('"stage": "STARTED"')));
   assert(sent.some((message) => message.includes('"stage": "STEP_STARTED"')));
   assert(sent.some((message) => message.includes('"stage": "STEP_COMPLETED"')));
+  assert(sent.some((message) => message.includes('"stage": "HEARTBEAT"')));
   assert(sent.some((message) => message.includes('"type": "REPORT"')));
 
   const audit = await readFile(
@@ -114,9 +126,62 @@ try {
     "utf8",
   );
   assert(audit.includes('"stage":"RECEIVED"'));
+  assert(audit.includes('"stage":"STATUS_DELIVERED"'));
+  assert(audit.includes('"stage":"HEARTBEAT"'));
   assert(audit.includes('"stage":"REPORT_PERSISTED"'));
   assert(audit.includes('"stage":"REPORT_DELIVERY_FAILED"'));
   assert(audit.includes('"stage":"REPORT_DELIVERED"'));
+
+  const recoveryJobId = "job-restart-recovery-test";
+  await store.claim(recoveryJobId);
+  const recoveryReport = [
+    "```kap",
+    JSON.stringify(
+      {
+        protocol: "KAP",
+        version: "1.0",
+        type: "REPORT",
+        id: `report-${recoveryJobId}`,
+        createdAt: new Date().toISOString(),
+        payload: {
+          jobId: recoveryJobId,
+          status: "COMPLETED",
+        },
+      },
+      null,
+      2,
+    ),
+    "```",
+  ].join("\n");
+  await store.recordReport(
+    recoveryJobId,
+    "COMPLETED",
+    recoveryReport,
+    `report-${recoveryJobId}`,
+  );
+
+  const recoveredMessages: string[] = [];
+  const restartedCenter = new JobCommunicationCenter(
+    async (message) => {
+      recoveredMessages.push(message);
+    },
+    {
+      cwd: root,
+      jobStore: store,
+      reportDeliveryAttempts: 2,
+      reportRetryDelaysMs: [1],
+    },
+  );
+
+  const recovered = await restartedCenter.recoverUndeliveredReports();
+  assert.equal(recovered.length, 1);
+  assert.equal(recovered[0]?.delivered, true);
+  assert.equal(recoveredMessages.length, 1);
+  assert(recoveredMessages[0]?.includes(`report-${recoveryJobId}`));
+
+  const recoveredStored = await store.get(recoveryJobId);
+  assert.equal(typeof recoveredStored?.reportDeliveredAt, "string");
+  assert.equal(recoveredStored?.reportDeliveryAttempts, 1);
 
   console.log("Job communication center tests passed.");
 } finally {
