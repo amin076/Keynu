@@ -44,6 +44,36 @@ export type PowerShellPatchJob = {
   payload: PatchPayload;
 };
 
+export type PowerShellProgressEvent = {
+  stage: "STARTED" | "COMPLETED" | "FAILED" | "SKIPPED";
+  phase: "write" | "read" | "command" | "build" | "git";
+  index?: number;
+  total?: number;
+  name?: string;
+  message?: string;
+  details?: Record<string, unknown>;
+};
+
+export type PowerShellPatchRunOptions = {
+  onProgress?: (event: PowerShellProgressEvent) => void | Promise<void>;
+};
+
+async function emitProgress(
+  options: PowerShellPatchRunOptions,
+  event: PowerShellProgressEvent,
+): Promise<void> {
+  if (!options.onProgress) return;
+
+  try {
+    await options.onProgress(event);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[powershell-patch] progress callback failed during ${event.phase}: ${message}`,
+    );
+  }
+}
+
 function safeResolve(cwd: string, filePath: string) {
   const fullPath = resolve(cwd, filePath);
   const root = resolve(cwd);
@@ -157,7 +187,10 @@ function formatCompactCommandFailure(result: { command?: string; blocked?: boole
     : `${operation} failed: ${command}`;
 }
 
-export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
+export async function runPowerShellPatchJob(
+  job: PowerShellPatchJob,
+  options: PowerShellPatchRunOptions = {},
+) {
   const payload = job.payload;
   const cwd = payload.cwd;
   const startedAt = new Date().toISOString();
@@ -184,7 +217,18 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     throw new Error("cwd does not exist: " + cwd);
   }
 
-  for (const file of payload.writeFiles ?? []) {
+  const writeFiles = payload.writeFiles ?? [];
+  for (let writeIndex = 0; writeIndex < writeFiles.length; writeIndex += 1) {
+    const file = writeFiles[writeIndex];
+    const index = writeIndex + 1;
+    await emitProgress(options, {
+      stage: "STARTED",
+      phase: "write",
+      index,
+      total: writeFiles.length,
+      name: file.path,
+    });
+
     try {
       const fullPath = safeResolve(cwd, file.path);
       mkdirSync(dirname(fullPath), { recursive: true });
@@ -230,17 +274,45 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
         originalBytes: Buffer.byteLength(readBackContent),
         artifact: readBackArtifact,
       });
+
+      await emitProgress(options, {
+        stage: "COMPLETED",
+        phase: "write",
+        index,
+        total: writeFiles.length,
+        name: file.path,
+      });
     } catch (error: any) {
+      const errorMessage = error.message ?? String(error);
       writes.push({
         path: file.path,
         ok: false,
-        error: error.message ?? String(error),
+        error: errorMessage,
       });
       errors.push("write failed: " + file.path);
+      await emitProgress(options, {
+        stage: "FAILED",
+        phase: "write",
+        index,
+        total: writeFiles.length,
+        name: file.path,
+        message: errorMessage,
+      });
     }
   }
 
-  for (const filePath of payload.readFiles ?? []) {
+  const readFiles = payload.readFiles ?? [];
+  for (let readIndex = 0; readIndex < readFiles.length; readIndex += 1) {
+    const filePath = readFiles[readIndex];
+    const index = readIndex + 1;
+    await emitProgress(options, {
+      stage: "STARTED",
+      phase: "read",
+      index,
+      total: readFiles.length,
+      name: filePath,
+    });
+
     try {
       const fullPath = safeResolve(cwd, filePath);
       const content = readFileSync(fullPath, "utf8");
@@ -264,19 +336,41 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
         originalBytes: Buffer.byteLength(content),
         artifact,
       });
+
+      await emitProgress(options, {
+        stage: "COMPLETED",
+        phase: "read",
+        index,
+        total: readFiles.length,
+        name: filePath,
+      });
     } catch (error: any) {
+      const errorMessage = error.message ?? String(error);
       reads.push({
         path: filePath,
         ok: false,
-        error: error.message ?? String(error),
+        error: errorMessage,
       });
       errors.push("read failed: " + filePath);
+      await emitProgress(options, {
+        stage: "FAILED",
+        phase: "read",
+        index,
+        total: readFiles.length,
+        name: filePath,
+        message: errorMessage,
+      });
     }
   }
 
   let commandChainFailed = false;
+  const commandSpecs = payload.commands ?? [];
 
-  for (const commandSpec of payload.commands ?? []) {
+  for (let commandIndex = 0; commandIndex < commandSpecs.length; commandIndex += 1) {
+    const commandSpec = commandSpecs[commandIndex];
+    const index = commandIndex + 1;
+    const commandName = [commandSpec.command, ...(commandSpec.args ?? [])].join(" ");
+
     if (
       commandChainFailed &&
       payload.continueOnError !== true &&
@@ -295,8 +389,24 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
         startedAt: timestamp,
         finishedAt: timestamp,
       });
+      await emitProgress(options, {
+        stage: "SKIPPED",
+        phase: "command",
+        index,
+        total: commandSpecs.length,
+        name: commandName,
+        message: "Skipped because a previous command failed",
+      });
       continue;
     }
+
+    await emitProgress(options, {
+      stage: "STARTED",
+      phase: "command",
+      index,
+      total: commandSpecs.length,
+      name: commandName,
+    });
 
     const result = await runCommand(
       commandSpec,
@@ -308,11 +418,33 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
     if (!result.ok) {
       commandChainFailed = true;
       errors.push(formatCompactCommandFailure(result));
+      await emitProgress(options, {
+        stage: "FAILED",
+        phase: "command",
+        index,
+        total: commandSpecs.length,
+        name: commandName,
+        message: result.error,
+        details: { blocked: result.blocked },
+      });
+    } else {
+      await emitProgress(options, {
+        stage: "COMPLETED",
+        phase: "command",
+        index,
+        total: commandSpecs.length,
+        name: commandName,
+      });
     }
   }
 
   let build = null;
   if (payload.buildCommand) {
+    const buildName = [
+      payload.buildCommand.command,
+      ...(payload.buildCommand.args ?? []),
+    ].join(" ");
+
     if (
       commandChainFailed &&
       payload.continueOnError !== true &&
@@ -331,7 +463,22 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
         startedAt: timestamp,
         finishedAt: timestamp,
       };
+      await emitProgress(options, {
+        stage: "SKIPPED",
+        phase: "build",
+        index: 1,
+        total: 1,
+        name: buildName,
+        message: "Skipped because a previous command failed",
+      });
     } else {
+      await emitProgress(options, {
+        stage: "STARTED",
+        phase: "build",
+        index: 1,
+        total: 1,
+        name: buildName,
+      });
       build = await runCommand(
         payload.buildCommand,
         cwd,
@@ -341,10 +488,33 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
       if (!build.ok) {
         commandChainFailed = true;
         errors.push(formatCompactCommandFailure(build, "build"));
+        await emitProgress(options, {
+          stage: "FAILED",
+          phase: "build",
+          index: 1,
+          total: 1,
+          name: buildName,
+          message: build.error,
+        });
+      } else {
+        await emitProgress(options, {
+          stage: "COMPLETED",
+          phase: "build",
+          index: 1,
+          total: 1,
+          name: buildName,
+        });
       }
     }
   }
 
+  await emitProgress(options, {
+    stage: "STARTED",
+    phase: "git",
+    index: 1,
+    total: 1,
+    name: "collect repository state",
+  });
   const git = {
     branch: await runCommand(
       { command: "git", args: ["branch", "--show-current"] },
@@ -362,6 +532,13 @@ export async function runPowerShellPatchJob(job: PowerShellPatchJob) {
       true,
     ),
   };
+  await emitProgress(options, {
+    stage: "COMPLETED",
+    phase: "git",
+    index: 1,
+    total: 1,
+    name: "collect repository state",
+  });
 
   const result = {
     jobId: job.id,
