@@ -2,6 +2,14 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync('src/browser/BrowserAgent.ts', 'utf8');
+const communicationCenter = readFileSync(
+  'src/kap/JobCommunicationCenter.ts',
+  'utf8',
+);
+const persistentStore = readFileSync(
+  'src/runtime/PersistentJobStore.ts',
+  'utf8',
+);
 
 assert.match(
   source,
@@ -20,13 +28,33 @@ assert.match(
 );
 assert.match(
   source,
-  /recordReport\(jobId, state, reportText, reportId\)/,
+  /communicationCenter\.deliverTerminalReport\(/,
+  'BrowserAgent terminal reports must flow through the central communication center.',
+);
+assert.match(
+  communicationCenter,
+  /jobStore\.recordReport\(kap\.id, state, reportText, reportId\)/,
   'Verified report text must be persisted before browser delivery.',
 );
 assert.match(
-  source,
-  /markReportDelivered\(jobId\)/,
+  communicationCenter,
+  /jobStore\.markReportDelivered\(record\.jobId\)/,
   'Report delivery acknowledgement must be persisted.',
+);
+assert.match(
+  communicationCenter,
+  /jobStore\.markReportDeliveryAttempt\(record\.jobId\)/,
+  'Each terminal report delivery attempt must be persisted.',
+);
+assert.match(
+  persistentStore,
+  /listUndeliveredReports\(\)/,
+  'Persistent storage must expose undelivered reports for restart recovery.',
+);
+assert.match(
+  source,
+  /communicationCenter\.recoverUndeliveredReports\(\)/,
+  'BrowserAgent startup or duplicate handling must recover persisted undelivered reports.',
 );
 assert.match(
   source,
@@ -49,6 +77,19 @@ assert.ok(genericRuntimeIndex >= 0);
 assert.ok(
   genericContinuationIndex > genericRuntimeIndex,
   'Generic driver/runtime jobs must continue the mission after their report.',
+);
+
+const routedDeliveryIndex = source.indexOf(
+  'communicationCenter.deliverTerminalReport(',
+);
+const routedContinuationIndex = source.indexOf(
+  'await this.continueAfterReport(',
+  routedDeliveryIndex,
+);
+assert.ok(routedDeliveryIndex >= 0);
+assert.ok(
+  routedContinuationIndex > routedDeliveryIndex,
+  'AI continuation must only be requested after terminal report delivery is attempted.',
 );
 
 console.log('BrowserAgentPersistentContinuationIntegration.test passed');

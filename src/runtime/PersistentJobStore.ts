@@ -16,6 +16,9 @@ export type StoredJob = {
   reportId?: string;
   reportText?: string;
   reportDeliveredAt?: string;
+  reportDeliveryAttempts?: number;
+  lastReportDeliveryAttemptAt?: string;
+  lastReportDeliveryError?: string;
 };
 
 type JobStoreData = {
@@ -41,6 +44,13 @@ export class PersistentJobStore {
 
   async has(jobId: string): Promise<boolean> {
     return Boolean(await this.get(jobId));
+  }
+
+  async listUndeliveredReports(): Promise<StoredJob[]> {
+    const data = await this.load();
+    return Object.values(data.jobs)
+      .filter((job) => Boolean(job.reportText) && !job.reportDeliveredAt)
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   }
 
   async claim(jobId: string): Promise<JobClaimResult> {
@@ -99,6 +109,51 @@ export class PersistentJobStore {
       reportId: reportId ?? existing?.reportId,
       reportText,
       reportDeliveredAt: undefined,
+      reportDeliveryAttempts: 0,
+      lastReportDeliveryAttemptAt: undefined,
+      lastReportDeliveryError: undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    data.jobs[jobId] = record;
+    await this.save(data);
+    return record;
+  }
+
+  async markReportDeliveryAttempt(jobId: string): Promise<StoredJob> {
+    const data = await this.load();
+    const existing = data.jobs[jobId];
+
+    if (!existing?.reportText) {
+      throw new Error(`Stored job '${jobId}' has no persisted report.`);
+    }
+
+    const now = new Date().toISOString();
+    const record: StoredJob = {
+      ...existing,
+      reportDeliveryAttempts: (existing.reportDeliveryAttempts ?? 0) + 1,
+      lastReportDeliveryAttemptAt: now,
+      lastReportDeliveryError: undefined,
+      updatedAt: now,
+    };
+    data.jobs[jobId] = record;
+    await this.save(data);
+    return record;
+  }
+
+  async markReportDeliveryFailed(
+    jobId: string,
+    error: string,
+  ): Promise<StoredJob> {
+    const data = await this.load();
+    const existing = data.jobs[jobId];
+
+    if (!existing?.reportText) {
+      throw new Error(`Stored job '${jobId}' has no persisted report.`);
+    }
+
+    const record: StoredJob = {
+      ...existing,
+      lastReportDeliveryError: error,
       updatedAt: new Date().toISOString(),
     };
     data.jobs[jobId] = record;
@@ -120,6 +175,7 @@ export class PersistentJobStore {
     const record: StoredJob = {
       ...existing,
       reportDeliveredAt: new Date().toISOString(),
+      lastReportDeliveryError: undefined,
       updatedAt: new Date().toISOString(),
     };
     data.jobs[jobId] = record;
