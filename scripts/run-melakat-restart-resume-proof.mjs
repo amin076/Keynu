@@ -45,6 +45,7 @@ function makeCoordinator() {
         return {
           action: "USE_CONFIGURED",
           projectId: "melakat",
+          projectRoot,
           missionId,
           diagnostics: [],
         };
