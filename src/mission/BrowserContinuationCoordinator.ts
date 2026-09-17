@@ -3,6 +3,7 @@ import { ContinuationDeliveryService } from './ContinuationDeliveryService.js';
 import { ContinuationStore } from './ContinuationStore.js';
 import { MissionStateStore } from './MissionStateStore.js';
 import type { ContinuationContract } from './ContinuationTypes.js';
+import { withProjectExecutionLease } from './execution/ProjectExecutionLease.js';
 
 export type BrowserContinuationMissionContext = {
   missionId: string;
@@ -87,100 +88,102 @@ export class BrowserContinuationCoordinator {
       };
     }
 
-    const runtimeState = this.missionStateStore.getMission(
-      resolvedMission.missionId,
-    );
+    return withProjectExecutionLease(resolvedMission.projectRoot, async () => {
+      const runtimeState = this.missionStateStore.getMission(
+        resolvedMission.missionId,
+      );
 
-    if (runtimeState?.status === 'COMPLETED') {
+      if (runtimeState?.status === 'COMPLETED') {
+        return {
+          missionId: context.missionId,
+          jobId: context.jobId,
+          decision: 'COMPLETED',
+          deliveryStatus: 'SKIPPED_POLICY',
+          requestId: `terminal-${context.missionId}`,
+          resumeToken: '',
+          reason: 'SKIPPED_COMPLETED_MISSION',
+        };
+      }
+
+      const reportStatus = normalizeStatus(context.reportStatus);
+      const completed = reportStatus === 'COMPLETED';
+      const previous = this.continuationStore.read(context.missionId);
+      const replayingSameJob = previous?.jobId === context.jobId;
+      const priorAutonomousStepCount =
+        context.autonomousStepCount ??
+        (replayingSameJob
+          ? Math.max(0, (previous?.autonomousStepCount ?? 0) - 1)
+          : previous?.autonomousStepCount) ??
+        0;
+      const priorConsecutiveFailureCount =
+        context.consecutiveFailureCount ??
+        (replayingSameJob
+          ? Math.max(0, (previous?.consecutiveFailureCount ?? 0) - (completed ? 0 : 1))
+          : previous?.consecutiveFailureCount) ??
+        0;
+
+      const continuation: ContinuationContract = completed
+        ? {
+            decision: 'WAITING_AI',
+            reason:
+              'The previous KAP job completed successfully. Evaluate the result and select a new, distinct mission step. Do not repeat the completed action.',
+            nextAction:
+              'evaluate_completed_job_and_select_next_distinct_mission_step',
+            owner: 'ai',
+            missionComplete: false,
+            retryable: false,
+          }
+        : {
+            decision: 'WAITING_AI',
+            reason:
+              'The previous KAP job did not complete successfully and the active mission requires an AI recovery decision.',
+            nextAction: context.nextAction || 'evaluate_failure_and_generate_recovery_job',
+            owner: 'ai',
+            missionComplete: false,
+            retryable: true,
+          };
+
+      const autonomousStepCount = replayingSameJob
+        ? previous?.autonomousStepCount ?? priorAutonomousStepCount + 1
+        : priorAutonomousStepCount + 1;
+      const consecutiveFailureCount = replayingSameJob
+        ? previous?.consecutiveFailureCount ?? (completed ? 0 : priorConsecutiveFailureCount + 1)
+        : completed
+          ? 0
+          : priorConsecutiveFailureCount + 1;
+
+      const persisted = this.continuationStore.record(
+        context.missionId,
+        'WAITING_AI',
+        continuation,
+        {
+          jobId: context.jobId,
+          autonomousStepCount,
+          consecutiveFailureCount,
+        },
+      );
+
+      const delivery = await this.deliveryService.deliver(
+        {
+          missionId: context.missionId,
+          missionTitle: context.missionTitle,
+          jobId: context.jobId,
+          continuation: persisted.continuation,
+          autonomousStepCount: priorAutonomousStepCount,
+          maxAutonomousSteps: context.maxAutonomousSteps || 12,
+        },
+        sendMessage,
+      );
+
       return {
         missionId: context.missionId,
         jobId: context.jobId,
-        decision: 'COMPLETED',
-        deliveryStatus: 'SKIPPED_POLICY',
-        requestId: `terminal-${context.missionId}`,
-        resumeToken: '',
-        reason: 'SKIPPED_COMPLETED_MISSION',
+        decision: persisted.continuation.decision,
+        deliveryStatus: delivery.status,
+        requestId: delivery.requestId,
+        resumeToken: delivery.resumeToken,
+        reason: delivery.reason,
       };
-    }
-
-    const reportStatus = normalizeStatus(context.reportStatus);
-    const completed = reportStatus === 'COMPLETED';
-    const previous = this.continuationStore.read(context.missionId);
-    const replayingSameJob = previous?.jobId === context.jobId;
-    const priorAutonomousStepCount =
-      context.autonomousStepCount ??
-      (replayingSameJob
-        ? Math.max(0, (previous?.autonomousStepCount ?? 0) - 1)
-        : previous?.autonomousStepCount) ??
-      0;
-    const priorConsecutiveFailureCount =
-      context.consecutiveFailureCount ??
-      (replayingSameJob
-        ? Math.max(0, (previous?.consecutiveFailureCount ?? 0) - (completed ? 0 : 1))
-        : previous?.consecutiveFailureCount) ??
-      0;
-
-    const continuation: ContinuationContract = completed
-      ? {
-          decision: 'WAITING_AI',
-          reason:
-            'The previous KAP job completed successfully. Evaluate the result and select a new, distinct mission step. Do not repeat the completed action.',
-          nextAction:
-            'evaluate_completed_job_and_select_next_distinct_mission_step',
-          owner: 'ai',
-          missionComplete: false,
-          retryable: false,
-        }
-      : {
-          decision: 'WAITING_AI',
-          reason:
-            'The previous KAP job did not complete successfully and the active mission requires an AI recovery decision.',
-          nextAction: context.nextAction || 'evaluate_failure_and_generate_recovery_job',
-          owner: 'ai',
-          missionComplete: false,
-          retryable: true,
-        };
-
-    const autonomousStepCount = replayingSameJob
-      ? previous?.autonomousStepCount ?? priorAutonomousStepCount + 1
-      : priorAutonomousStepCount + 1;
-    const consecutiveFailureCount = replayingSameJob
-      ? previous?.consecutiveFailureCount ?? (completed ? 0 : priorConsecutiveFailureCount + 1)
-      : completed
-        ? 0
-        : priorConsecutiveFailureCount + 1;
-
-    const persisted = this.continuationStore.record(
-      context.missionId,
-      'WAITING_AI',
-      continuation,
-      {
-        jobId: context.jobId,
-        autonomousStepCount,
-        consecutiveFailureCount,
-      },
-    );
-
-    const delivery = await this.deliveryService.deliver(
-      {
-        missionId: context.missionId,
-        missionTitle: context.missionTitle,
-        jobId: context.jobId,
-        continuation: persisted.continuation,
-        autonomousStepCount: priorAutonomousStepCount,
-        maxAutonomousSteps: context.maxAutonomousSteps || 12,
-      },
-      sendMessage,
-    );
-
-    return {
-      missionId: context.missionId,
-      jobId: context.jobId,
-      decision: persisted.continuation.decision,
-      deliveryStatus: delivery.status,
-      requestId: delivery.requestId,
-      resumeToken: delivery.resumeToken,
-      reason: delivery.reason,
-    };
+    });
   }
 }
