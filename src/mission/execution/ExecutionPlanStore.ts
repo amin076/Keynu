@@ -14,12 +14,16 @@ export class ExecutionPlanStore {
     try {
       const data = JSON.parse(await readFile(this.file, 'utf8')) as ExecutionDatabase;
       if (data.version !== 1 || !data.plans || typeof data.plans !== 'object' || Array.isArray(data.plans)) throw new Error('Invalid plan store.');
+      if (data.paused !== undefined && typeof data.paused !== 'boolean') throw new Error('Invalid paused state.');
       for (const plan of Object.values(data.plans)) {
+        if (plan.nextPlanId && !Object.hasOwn(data.plans, plan.nextPlanId)) throw new Error('Missing recurring successor.');
         ExecutionPlan.parse(plan.definition);
         for (const step of plan.definition.steps) {
           const state = plan.steps?.[step.id];
           if (!state || !['PENDING', 'RUNNING', 'COMPLETED', 'BLOCKED', 'INTERRUPTED'].includes(state.status)
-            || !Number.isInteger(state.aiCalls) || state.aiCalls < 0) throw new Error('Invalid persisted step state.');
+            || !Number.isInteger(state.aiCalls) || state.aiCalls < 0
+            || !Number.isFinite(Date.parse(state.updatedAt))
+            || (state.successfulActions !== undefined && (!Number.isInteger(state.successfulActions) || state.successfulActions < 0))) throw new Error('Invalid persisted step state.');
         }
       }
       return data;
@@ -51,6 +55,27 @@ export class ExecutionPlanStore {
       }
       data.plans[plan.id] = { definition: plan, steps: Object.fromEntries(plan.steps.map(step => [step.id,
         { status: 'PENDING', aiCalls: 0, updatedAt: new Date().toISOString() }])) };
+    });
+  }
+  async enqueueRecurring(now = Date.now()): Promise<void> {
+    await this.transaction(data => {
+      for (const stored of Object.values(data.plans)) {
+        const repeat = stored.definition.recurrence;
+        if (!repeat || stored.nextPlanId || !Object.values(stored.steps).every(step => step.status === 'COMPLETED')) continue;
+        const nextId = randomUUID();
+        const definition = ExecutionPlan.parse({ ...stored.definition, id: nextId,
+          notBefore: new Date(now + repeat.intervalMs).toISOString(),
+          recurrence: repeat.maxRuns > 2 ? { ...repeat, maxRuns: repeat.maxRuns - 1 } : undefined });
+        stored.nextPlanId = nextId;
+        data.plans[nextId] = { definition, steps: Object.fromEntries(definition.steps.map(step => [step.id,
+          { status: 'PENDING', aiCalls: 0, updatedAt: new Date(now).toISOString() }])) };
+      }
+    });
+  }
+  async heartbeat(planId: string, stepId: string): Promise<void> {
+    await this.transaction(data => {
+      const state = data.plans[planId]?.steps[stepId];
+      if (state?.status === 'RUNNING') state.lastHeartbeatAt = new Date().toISOString();
     });
   }
   async update(planId: string, stepId: string, patch: Partial<StepState>): Promise<void> {

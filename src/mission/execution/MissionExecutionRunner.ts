@@ -1,3 +1,4 @@
+import { withProjectExecutionLock } from '../../runtime/storage/ProjectExecutionLock.js';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock } from '../../runtime/storage/FileTransaction.js';
@@ -22,10 +23,13 @@ export class MissionExecutionRunner {
         }
       });
       while (!signal?.aborted) {
+        await this.store.enqueueRecurring();
         const data = await this.store.read();
+        if (data.paused) return;
         const batch: Array<{ plan: ExecutionPlan; step: ExecutionStep }> = [];
         const roots = new Set<string>();
         for (const stored of Object.values(data.plans)) {
+          if (stored.definition.notBefore && Date.parse(stored.definition.notBefore) > Date.now()) continue;
           for (const step of stored.definition.steps) {
             if (stored.steps[step.id]?.status !== 'PENDING') continue;
             if (!step.dependsOn.every(id => stored.steps[id]?.status === 'COMPLETED')) continue;
@@ -74,39 +78,64 @@ export class MissionExecutionRunner {
       memory: bounded(memory, 16000), priorPlans: bounded(priorPlans, 16000), history: bounded(history.reverse(), 48000) };
   }
   private async execute(plan: ExecutionPlan, step: ExecutionStep, signal?: AbortSignal): Promise<void> {
-    await withFileLock(join(plan.projectRoot, '.keynu', 'state', 'mission-execution'), async () => {
-      await this.store.update(plan.id, step.id, { status: 'RUNNING', reason: 'Executing approved step.',
+    await withProjectExecutionLock(plan.projectRoot, async () => {
+      await this.store.update(plan.id, step.id, { status: 'RUNNING', reason: 'Executing approved step.', phase: 'PLANNING', lastHeartbeatAt: new Date().toISOString(),
         continuation: { decision: 'LOCAL_CONTINUE', owner: 'mission_engine', missionComplete: false,
           reason: 'Execute the next approved plan step.', nextAction: step.id } });
+      let heartbeatWork: Promise<void> = Promise.resolve();
+      let heartbeatFailure: unknown;
+      const heartbeat = setInterval(() => {
+        heartbeatWork = heartbeatWork.then(() => this.store.heartbeat(plan.id, step.id))
+          .catch(error => { heartbeatFailure = error; });
+      }, 10000);
+      let actions = (await this.store.read()).plans[plan.id]!.steps[step.id]!.successfulActions ?? 0;
       try {
         this.functions.describe(step.allowedFunctions);
         while (true) {
-          if (signal?.aborted) throw new Error('Worker stopped before next action.');
+          if (signal?.aborted || (await this.store.read()).paused) throw new Error('Worker stopped before next action.');
+          if (heartbeatFailure) throw heartbeatFailure;
+          await this.store.update(plan.id, step.id, { phase: 'PLANNING', action: 'Request next decision' });
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
           const decision = AgentDecision.parse(await this.agent.decide(await this.context(plan, step)));
           await this.store.evidence(plan.id, step.id, 'decision', decision);
+          if (signal?.aborted || (await this.store.read()).paused) throw new Error('Worker stopped before applying AI decision.');
           if (decision.kind === 'call') {
             // Intent is persisted before a possibly non-idempotent operation.
+            await this.store.update(plan.id, step.id, { phase: 'FUNCTION', action: decision.name });
             const result = await this.functions.invoke(decision.name, decision.args,
               { projectRoot: plan.projectRoot }, step.allowedFunctions);
             await this.store.evidence(plan.id, step.id, 'function-result', { call: decision, result });
             if (!result.ok) throw new Error(`Function failed: ${decision.name}`);
+            actions++;
+            await this.store.update(plan.id, step.id, { successfulActions: actions });
+            const interval = step.reviewEveryActions ?? 3;
+            if (interval > 0 && actions % interval === 0) {
+              await this.store.update(plan.id, step.id, { phase: 'PROGRESS_REVIEW', action: 'Check alignment with approved goal' });
+              await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
+              const progress = ReviewDecision.parse(await this.agent.review(await this.context(plan, step), 'progress'));
+              await this.store.evidence(plan.id, step.id, 'progress-review', progress);
+              if (!progress.approved) throw new Error(`Progress review rejected: ${progress.reason}`);
+            }
             continue;
           }
           for (const check of step.verification) {
+            if (signal?.aborted) throw new Error('Worker stopped before verification.');
+            await this.store.update(plan.id, step.id, { phase: 'VERIFICATION', action: check.name });
             await this.store.evidence(plan.id, step.id, 'verification-intent', check);
             const result = await this.functions.invoke(check.name, check.args,
               { projectRoot: plan.projectRoot }, step.allowedFunctions);
             await this.store.evidence(plan.id, step.id, 'verification', { check, result });
             if (!result.ok) throw new Error(`Verification failed: ${check.name}`);
           }
+          if (signal?.aborted) throw new Error('Worker stopped before final review.');
+          await this.store.update(plan.id, step.id, { phase: 'FINAL_REVIEW', action: 'Review completion evidence' });
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
           const review = ReviewDecision.parse(await this.agent.review({ context: await this.context(plan, step), completion: decision }));
           await this.store.evidence(plan.id, step.id, 'review', review);
           if (!review.approved) throw new Error(`Review rejected: ${review.reason}`);
           const data = await this.store.read();
           const complete = Object.entries(data.plans[plan.id]!.steps).every(([id, state]) => id === step.id || state.status === 'COMPLETED');
-          await this.store.update(plan.id, step.id, { status: 'COMPLETED', reason: `${decision.summary}\nReview: ${review.reason}`,
+          await this.store.update(plan.id, step.id, { status: 'COMPLETED', phase: 'IDLE', action: undefined, reason: `${decision.summary}\nReview: ${review.reason}`,
             nextSteps: [...decision.nextSteps, ...review.nextSteps],
             continuation: { decision: complete ? 'COMPLETED' : 'LOCAL_CONTINUE', owner: complete ? 'none' : 'mission_engine',
               missionComplete: complete, reason: 'Verification and review passed.', nextAction: complete ? 'Review saved follow-up proposals.' : 'Select the next dependency-ready step.' } });
@@ -115,9 +144,12 @@ export class MissionExecutionRunner {
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         await this.store.evidence(plan.id, step.id, 'blocked', { reason });
-        await this.store.update(plan.id, step.id, { status: 'BLOCKED', reason,
+        await this.store.update(plan.id, step.id, { status: 'BLOCKED', phase: 'IDLE', action: undefined, reason,
           continuation: { decision: 'BLOCKED', owner: 'user', missionComplete: false,
             reason, nextAction: 'Inspect evidence and reconcile before resuming.', retryable: false } });
+      } finally {
+        clearInterval(heartbeat);
+        await heartbeatWork;
       }
     });
   }

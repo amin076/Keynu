@@ -1,6 +1,5 @@
-import { execFile } from "node:child_process";
+import { executeCommand } from "../../runtime/CommandExecutor.js";
 import { createHash } from "node:crypto";
-import { promisify } from "node:util";
 import {
   existsSync,
   readFileSync,
@@ -15,7 +14,6 @@ import {
   type PowerShellCommandSpec,
 } from "./powershell-safety.js";
 
-const execFileAsync = promisify(execFile);
 
 type WriteFileSpec = {
   path: string;
@@ -121,32 +119,14 @@ async function runCommand(
     };
   }
 
-  const loweredCommand = command.toLowerCase();
-  const safeCommand =
-    process.platform === "win32" && loweredCommand === "npm"
-      ? "npm.cmd"
-      : process.platform === "win32" && loweredCommand === "npx"
-        ? "npx.cmd"
-        : command;
-
-  const requiresShell =
-    process.platform === "win32" &&
-    (safeCommand.toLowerCase().endsWith(".cmd") ||
-      safeCommand.toLowerCase().endsWith(".bat"));
-
   try {
-    const result = await execFileAsync(safeCommand, args, {
-      cwd,
-      windowsHide: true,
-      timeout: 120000,
-      maxBuffer: 1024 * 1024 * 20,
-      shell: requiresShell,
-    });
+    const result = await executeCommand({ command, args, timeoutMs: 120000 }, cwd);
 
     return {
       command,
       args,
-      ok: true,
+      ok: result.ok,
+      error: result.error,
       blocked: false,
       stdout: result.stdout,
       stderr: result.stderr,

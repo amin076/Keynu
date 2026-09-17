@@ -1,3 +1,4 @@
+import { ExecutionPlansPanel } from './ExecutionPlansPanel.js';
 import MissionPanel from "./MissionPanel.js";
 import { MissionOverview } from "./MissionOverview.js";
 import { RecentActivityCard } from "./RecentActivityCard.js";
@@ -18,6 +19,7 @@ export function MissionsWorkspace({ runtime }: MissionsWorkspaceProps) {
         <p>Current mission state, execution context and recent mission activity.</p>
       </header>
 
+      <ExecutionPlansPanel />
       <div className="missions-workspace-grid">
         <MissionOverview />
         <MissionPanel runtime={runtime} />

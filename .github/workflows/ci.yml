@@ -52,5 +52,6 @@ jobs:
           path: |
             keynu-build.log
             keynu-tests.log
+            .keynu/test-artifacts/execution-monitor.png
           if-no-files-found: ignore
           retention-days: 7

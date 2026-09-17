@@ -1,3 +1,4 @@
+import { withProjectExecutionLock, projectLockEnvironment } from './storage/ProjectExecutionLock.js';
 import { assertWindowsShellArguments } from './WindowsShellSafety.js';
 import { spawn } from 'node:child_process';
 import type { CommandSpec } from './CommandSpec.js';
@@ -20,7 +21,7 @@ function requiresWindowsShell(command: string): boolean {
   return lowered.endsWith('.cmd') || lowered.endsWith('.bat');
 }
 
-export async function executeCommand(
+async function executeCommandUnlocked(
   spec: CommandSpec,
   defaultCwd: string,
 ): Promise<CommandExecutionResult> {
@@ -141,6 +142,7 @@ export async function executeCommand(
       if (requiresWindowsShell(command)) assertWindowsShellArguments(command, args);
       const child = spawn(command, args, {
         cwd,
+        env: projectLockEnvironment(),
         shell: requiresWindowsShell(command),
         windowsHide: true,
         windowsVerbatimArguments: false,
@@ -179,4 +181,9 @@ export async function executeCommand(
       finish(false, error instanceof Error ? error.message : String(error));
     }
   });
+}
+
+/** Cooperates with API mission ownership, including nested script execution. */
+export async function executeCommand(spec: CommandSpec, defaultCwd: string): Promise<CommandExecutionResult> {
+  return withProjectExecutionLock(defaultCwd, () => executeCommandUnlocked(spec, defaultCwd));
 }

@@ -1,3 +1,4 @@
+import { executionMonitor } from './ExecutionMonitor.js';
 import { executionApiServer } from './ExecutionApiServer.js';
 import { readFile, realpath } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
@@ -13,6 +14,7 @@ import { ApiExecutionAgent } from './ApiExecutionAgent.js';
 import { MissionExecutionRunner } from './MissionExecutionRunner.js';
 
 const Config = z.object({ stateDirectory: z.string().default('.keynu/execution'),
+  autoRun: z.boolean().default(false),
   concurrency: z.number().int().min(1).max(4).default(3),
   scripts: z.array(ScriptDefinition).default([]),
   apiProjects: z.array(z.object({ root: z.string(), allowedFunctions: z.array(z.string()).min(1) }).strict()).default([]),
@@ -20,12 +22,13 @@ const Config = z.object({ stateDirectory: z.string().default('.keynu/execution')
 
 async function main(): Promise<void> {
   const [command, configPath, ...args] = process.argv.slice(2);
-  if (!configPath || !['add', 'status', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
-    throw new Error('Usage: npm run mission -- <add|status|run|watch|resume|serve> config.json [plan.json | planId stepId]');
+  if (!configPath || !['add', 'status', 'run', 'watch', 'resume', 'serve', 'monitor'].includes(command ?? '')) {
+    throw new Error('Usage: npm run mission -- <add|status|run|watch|resume|serve|monitor> config.json [plan.json | planId stepId]');
   }
   const base = dirname(resolve(configPath));
   const config = Config.parse(JSON.parse(await readFile(configPath, 'utf8')));
   const store = new ExecutionPlanStore(resolve(base, config.stateDirectory));
+  if (command === 'monitor') { console.log(JSON.stringify(executionMonitor(await store.read()), null, 2)); return; }
   if (command === 'status') { console.log(JSON.stringify(await store.read(), null, 2)); return; }
   if (command === 'add') {
     if (!args[0]) throw new Error('Plan file required.');
@@ -53,7 +56,7 @@ async function main(): Promise<void> {
   if (command === 'serve') {
     const port = z.coerce.number().int().min(1).max(65535).parse(process.env.KEYNU_API_PORT ?? 4788);
     const server = executionApiServer(runner, process.env.KEYNU_API_TOKEN ?? '',
-      config.apiProjects.map(project => ({ ...project, root: resolve(base, project.root) })));
+      config.apiProjects.map(project => ({ ...project, root: resolve(base, project.root) })), { autoRun: config.autoRun });
     server.listen(port, '127.0.0.1', () => console.log(`Keynu execution API listening on 127.0.0.1:${port}`));
     const close = () => server.close();
     process.once('SIGINT', close); process.once('SIGTERM', close);
@@ -61,6 +64,7 @@ async function main(): Promise<void> {
   }
   const controller = new AbortController();
   process.once('SIGINT', () => controller.abort()); process.once('SIGTERM', () => controller.abort());
+  if (command === 'run') await store.transaction(data => { data.paused = false; });
   do {
     await runner.run(controller.signal);
     console.log(JSON.stringify(await store.read(), null, 2));

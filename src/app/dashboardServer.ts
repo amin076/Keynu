@@ -1,4 +1,6 @@
-﻿import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+﻿import { ExecutionPlanStore } from '../mission/execution/ExecutionPlanStore.js';
+import { executionMonitor } from '../mission/execution/ExecutionMonitor.js';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -229,6 +231,12 @@ export async function startDashboardServer(options: DashboardServerOptions): Pro
   const server = createServer(async (request, response) => {
     try {
       const path = getPath(request);
+      if (path === '/api/execution-monitor') {
+        if (request.method !== 'GET') { sendJson(response, 405, { error: 'Read-only endpoint.' }); return; }
+        const store = new ExecutionPlanStore(process.env.KEYNU_EXECUTION_STATE_DIR ?? join(process.cwd(), '.keynu', 'execution'));
+        sendJson(response, 200, executionMonitor(await store.read()));
+        return;
+      }
       const handledByDashboardApi = await handleDashboardApi(request, response, {
         getDrivers: () => options.driverManager?.getDriverSummaries() ?? [],
         getProcesses: async () => {

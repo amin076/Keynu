@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 export interface ExecutionAgent {
   decide(context: unknown): Promise<ReturnType<typeof AgentDecision.parse>>;
-  review(context: unknown): Promise<ReturnType<typeof ReviewDecision.parse>>;
+  review(context: unknown, mode?: 'progress' | 'completion'): Promise<ReturnType<typeof ReviewDecision.parse>>;
 }
 
 export class ApiExecutionAgent implements ExecutionAgent {
@@ -28,8 +28,8 @@ export class ApiExecutionAgent implements ExecutionAgent {
     return AgentDecision.parse(await this.request(this.worker,
       'You execute one approved mission step. Choose exactly one registered function with {"kind":"call","name":"...","args":{...}}, or finish with {"kind":"finish","summary":"...","nextSteps":["..."]}. Use evidence to avoid repeating completed actions. Do not claim changes or checks you have not observed. Never broaden the approved goal.', context));
   }
-  async review(context: unknown) {
+  async review(context: unknown, mode: 'progress' | 'completion' = 'completion') {
     return ReviewDecision.parse(await this.request(this.reviewer,
-      'You are a separate review pass, with no execution tools. Check the approved goal against actual action results and deterministic verification. Reject unsupported completion, irrelevant edits, missing evidence or failed checks. Reply {"approved":true|false,"reason":"...","nextSteps":["..."]}. Passing checks alone is not proof of the whole goal.', context));
+      (mode === 'progress' ? 'You review progress before the goal is complete. Approve only if recent actions are relevant, supported by results and moving toward the approved goal. Reject repeated unproductive actions or scope drift. Do not require final completion yet. Reply {"approved":true|false,"reason":"...","nextSteps":["..."]}.' : 'You are a separate review pass, with no execution tools. Check the approved goal against actual action results and deterministic verification. Reject unsupported completion, irrelevant edits, missing evidence or failed checks. Reply {"approved":true|false,"reason":"...","nextSteps":["..."]}. Passing checks alone is not proof of the whole goal.'), context));
   }
 }
