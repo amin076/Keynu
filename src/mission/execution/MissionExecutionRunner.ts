@@ -6,6 +6,7 @@ import type { FunctionRegistry } from '../../engineering/functions/FunctionRegis
 import type { ExecutionAgent } from './ApiExecutionAgent.js';
 import { ExecutionPlanStore } from './ExecutionPlanStore.js';
 import { AgentDecision, ReviewDecision, type ExecutionPlan, type ExecutionStep } from './ExecutionPlan.js';
+import { withProjectExecutionLease } from './ProjectExecutionLease.js';
 
 export class MissionExecutionRunner {
   constructor(readonly store: ExecutionPlanStore, private readonly functions: FunctionRegistry,
@@ -74,7 +75,7 @@ export class MissionExecutionRunner {
       memory: bounded(memory, 16000), priorPlans: bounded(priorPlans, 16000), history: bounded(history.reverse(), 48000) };
   }
   private async execute(plan: ExecutionPlan, step: ExecutionStep, signal?: AbortSignal): Promise<void> {
-    await withFileLock(join(plan.projectRoot, '.keynu', 'state', 'mission-execution'), async () => {
+    await withProjectExecutionLease(plan.projectRoot, async () => {
       await this.store.update(plan.id, step.id, { status: 'RUNNING', reason: 'Executing approved step.',
         continuation: { decision: 'LOCAL_CONTINUE', owner: 'mission_engine', missionComplete: false,
           reason: 'Execute the next approved plan step.', nextAction: step.id } });
