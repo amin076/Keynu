@@ -162,13 +162,15 @@ export class ProviderRuntime {
       });
     }
 
-    const status = errors.length > 0
-      ? items.length > 0
+    const failed = items.filter(item => item.status === 'FAILED' || item.status === 'PARTIAL');
+    const completed = items.filter(item => item.status === 'COMPLETED');
+    const status = errors.length > 0 || failed.length > 0
+      ? completed.length > 0 || items.some(item => item.status === 'PARTIAL')
         ? 'PARTIAL'
         : 'FAILED'
-      : items.length > 0
+      : completed.length > 0
         ? 'COMPLETED'
-        : 'FAILED';
+        : 'SKIPPED';
 
     events.push({
       type: status === 'FAILED' ? 'runtime.failed' : 'runtime.completed',

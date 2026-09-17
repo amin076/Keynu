@@ -29,6 +29,12 @@ export function normalizeAPIConfig(config: APIConfig): NormalizedAPIConfig {
     throw new Error('API provider endpoint is required.');
   }
 
+  if (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 0 || config.timeoutMs > 3600000)) {
+    throw new Error('API timeoutMs must be an integer from 0 to 3600000.');
+  }
+  if (config.retryCount !== undefined && (!Number.isInteger(config.retryCount) || config.retryCount < 0 || config.retryCount > 10)) {
+    throw new Error('API retryCount must be an integer from 0 to 10.');
+  }
   return {
     ...config,
     timeoutMs: Math.max(1, config.timeoutMs ?? 30_000),

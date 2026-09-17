@@ -1,5 +1,7 @@
 import {
   access,
+  lstat,
+  realpath,
   mkdir,
   readFile,
   readdir,
@@ -12,8 +14,8 @@ import type {
   FileSystemResult,
 } from "./filesystem-types.js";
 
-function safePath(cwd: string, inputPath: string): { fullPath: string; relativePath: string } {
-  const root = resolve(cwd);
+async function safePath(cwd: string, inputPath: string): Promise<{ fullPath: string; relativePath: string }> {
+  const root = await realpath(cwd);
   const fullPath = resolve(root, inputPath);
   const relativePath = relative(root, fullPath);
 
@@ -25,6 +27,15 @@ function safePath(cwd: string, inputPath: string): { fullPath: string; relativeP
     throw new Error("Path is outside the approved workspace.");
   }
 
+  let cursor = fullPath;
+  while (cursor !== root) {
+    try {
+      if ((await lstat(cursor)).isSymbolicLink()) throw new Error('Symbolic links are not allowed in filesystem operations.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    cursor = dirname(cursor);
+  }
   return { fullPath, relativePath: relativePath || "." };
 }
 
@@ -48,7 +59,7 @@ export async function executeFileSystemRequest(
     throw new Error("Filesystem request requires action");
   }
 
-  const resolvedPath = safePath(cwd, request.path);
+  const resolvedPath = await safePath(cwd, request.path);
   const path = resolvedPath.fullPath;
 
   switch (request.action) {

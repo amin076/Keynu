@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-17",
+  "baseline_commit": "5981901",
+  "environment": "Linux",
+  "build": "passed",
+  "test_files": 119,
+  "passed_test_files": 117,
+  "failed_test_files": [
+    {
+      "path": "dist/browser/tests/ConversationManagerContentEditableComposer.test.js",
+      "exit": 1,
+      "cause": "Chromium executable unavailable; download timed out"
+    },
+    {
+      "path": "dist/browser/tests/ConversationManagerDelayedComposerHydration.test.js",
+      "exit": 1,
+      "cause": "Chromium executable unavailable; download timed out"
+    }
+  ],
+  "test_log_sha256": "39190efbd78ca1781e78fa1490f66ce38a47eb5b7d9a9fdbef4eced4e8934d47",
+  "npm_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "live_openai_test": "not run",
+  "windows_process_test": "pending Windows CI",
+  "browser_install": "failed: download connection timeouts"
+}

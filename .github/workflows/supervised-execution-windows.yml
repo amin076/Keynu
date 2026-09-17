@@ -1,0 +1,32 @@
+name: Supervised execution Windows regression
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run mission, API and boundary regressions
+        shell: pwsh
+        run: |
+          $testFiles = @(
+            'dist/runtime/tests/AuditRegressions.test.js',
+            'dist/runtime/tests/AuditBoundaryRegressions.test.js',
+            'dist/mission/execution/tests/MissionExecution.test.js',
+            'dist/mission/execution/tests/ApiExecution.test.js',
+            'dist/mission/execution/tests/ExecutionApiServer.test.js'
+          )
+          foreach ($testFile in $testFiles) {
+            node $testFile
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

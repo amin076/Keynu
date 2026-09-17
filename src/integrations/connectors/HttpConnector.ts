@@ -62,9 +62,15 @@ export class HttpConnector implements IntegrationConnector {
             ? config.timeoutMs
             : 30_000;
 
+    if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 3600000) {
+      throw new Error('HTTP timeout must be a positive finite number up to one hour.');
+    }
     const response = await axios.request({
-      baseURL: baseUrl.toString(),
-      url: path,
+      url: target.toString(),
+      // A redirect can escape the origin validated above. Return it as a failed response.
+      maxRedirects: 0,
+      maxContentLength: 1024 * 1024,
+      maxBodyLength: 1024 * 1024,
       method,
       params: objectOrUndefined(context.input.query, "HTTP input.query"),
       data: context.input.body,

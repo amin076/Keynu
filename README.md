@@ -235,3 +235,24 @@ Keynu is an open-source step toward that future.
 # License
 
 License information will be added before public release.
+
+## Supervised API mission worker
+
+Keynu now also includes an opt-in headless mission worker and authenticated loopback API.
+It executes schema-validated named functions, persists goals and dependency steps, runs
+up to four independent projects concurrently, and requires deterministic verification plus
+an AI review before advancing. It reuses the OpenAI provider and existing project memory.
+
+See [setup and API routes](docs/DEVELOPMENT/SUPERVISED_API_EXECUTION.md),
+[architecture and recovery limits](docs/adr/ADR-0014-SUPERVISED-API-MISSION-EXECUTION.md), and
+[September 17 audit](docs/AUDIT/KEYNU_FULL_AUDIT_2026-09-17.md).
+
+```powershell
+npm run build
+npm run mission -- add examples/execution/config.json examples/execution/keynu-audit.plan.json
+npm run mission -- status examples/execution/config.json
+```
+
+After configuring API credentials locally, use `mission -- run` or `mission -- watch`
+with the same config. `mission -- serve` exposes the token-protected local HTTP API.
+No API calls or background service start merely from installing/building Keynu.

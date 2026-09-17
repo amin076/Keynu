@@ -1,3 +1,4 @@
+import { assertWindowsShellArguments } from './WindowsShellSafety.js';
 import { spawn } from 'node:child_process';
 import type { CommandSpec } from './CommandSpec.js';
 import type { CommandExecutionResult } from './CommandExecutionResult.js';
@@ -67,6 +68,7 @@ export async function executeCommand(
           args: runtimeCommand.args,
           cwd,
           timeoutMs: spec.timeoutMs,
+          expectedExitCodes: spec.expectedExitCodes,
           runAfterFailure: spec.runAfterFailure,
         },
         defaultCwd,
@@ -104,6 +106,8 @@ export async function executeCommand(
     let stdout = '';
     let stderr = '';
     let settled = false;
+    let outputExceeded = false;
+    const outputLimit = 1024 * 1024;
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     const finish = (
@@ -134,6 +138,7 @@ export async function executeCommand(
 
     try {
       const command = normalizeWindowsCommand(spec.command);
+      if (requiresWindowsShell(command)) assertWindowsShellArguments(command, args);
       const child = spawn(command, args, {
         cwd,
         shell: requiresWindowsShell(command),
@@ -149,20 +154,24 @@ export async function executeCommand(
       }
 
       child.stdout?.on('data', (chunk) => {
-        stdout += String(chunk);
+        const value = String(chunk);
+        if (stdout.length + value.length > outputLimit) outputExceeded = true;
+        stdout = (stdout + value).slice(0, outputLimit);
       });
 
       child.stderr?.on('data', (chunk) => {
-        stderr += String(chunk);
+        const value = String(chunk);
+        if (stderr.length + value.length > outputLimit) outputExceeded = true;
+        stderr = (stderr + value).slice(0, outputLimit);
       });
 
       child.on('error', (error) => finish(false, error.message));
 
       child.on('close', (code) => {
-        const ok = expectedExitCodes.includes(code ?? -1);
+        const ok = !outputExceeded && expectedExitCodes.includes(code ?? -1);
         finish(
           ok,
-          ok ? undefined : `Command exited with code ${code}`,
+          ok ? undefined : outputExceeded ? 'Command output exceeded capture limit.' : `Command exited with code ${code}`,
           code,
         );
       });
