@@ -1,0 +1,16 @@
+{
+  "id": "keynu-audit-example-001",
+  "projectId": "keynu",
+  "projectRoot": "../..",
+  "goal": "Inspect Keynu's README and package scripts, verify the build, and save an evidence-based audit with concrete follow-up proposals.",
+  "rules": ["Do not change source files in this audit plan.", "Separate observed evidence from proposals.", "Do not claim a live AI, Windows or browser test unless one actually ran."],
+  "steps": [
+    {
+      "id": "audit",
+      "goal": "Read README.md and package.json. Explain the current run commands, identify documentation gaps, and return concrete follow-up proposals.",
+      "allowedFunctions": ["project.list", "project.read", "git.status", "project.verify"],
+      "verification": [{"name": "project.verify", "args": {"script": "build"}}],
+      "maxAiCalls": 10
+    }
+  ]
+}

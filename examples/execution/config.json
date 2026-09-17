@@ -1,0 +1,10 @@
+{
+  "stateDirectory": "../../.keynu/execution",
+  "concurrency": 3,
+  "scripts": [
+    {"name": "project.verify", "description": "Run the project's existing build or test script using npm.", "runtime": "node", "script": "./verify-project.mjs", "fields": {"script": "string"}, "timeoutMs": 660000},
+    {"name": "example.node", "description": "Echo typed JSON arguments using Node.", "runtime": "node", "script": "./echo-node.mjs", "fields": {"message": "string", "count": "number"}},
+    {"name": "example.powershell", "description": "Echo typed JSON arguments using Windows PowerShell.", "runtime": "powershell", "script": "./echo-powershell.ps1", "fields": {"message": "string", "count": "number"}}
+  ],
+  "apiProjects": [{"root": "../..", "allowedFunctions": ["project.list", "project.read", "git.status", "project.verify"]}]
+}

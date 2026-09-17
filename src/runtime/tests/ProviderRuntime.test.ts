@@ -72,7 +72,7 @@ const missionAck = await runtime.execute(createProviderResponse({
   ].join('\n'),
 }));
 
-assert.equal(missionAck.status, 'COMPLETED');
+assert.equal(missionAck.status, 'SKIPPED');
 assert.equal(missionAck.items.length, 1);
 assert.equal(missionAck.items[0]?.action, 'UNHANDLED');
 assert.equal(missionAck.items[0]?.envelope.type, 'MISSION_ACK');

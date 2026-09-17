@@ -1,3 +1,4 @@
+import { openAIHttpError } from './OpenAIHttpError.js';
 import { APIProviderError, normalizeAPIError } from '../api/APIError.js';
 import type { APIStream } from '../api/APIStreaming.js';
 import type {
@@ -16,29 +17,6 @@ export type OpenAIFetch = typeof fetch;
 export type OpenAITransportOptions = {
   fetch?: OpenAIFetch;
 };
-
-async function readErrorMessage(response: Response): Promise<string> {
-  try {
-    const parsed = await response.json() as {
-      error?: {
-        message?: string;
-      };
-    };
-    return parsed.error?.message ?? response.statusText;
-  } catch {
-    return response.statusText;
-  }
-}
-
-function errorCategory(status: number): APIProviderError['category'] {
-  if (status === 401 || status === 403) return 'authentication';
-  if (status === 402) return 'quota';
-  if (status === 408) return 'timeout';
-  if (status === 429) return 'rate_limit';
-  if (status === 400 || status === 422) return 'invalid_request';
-  if (status >= 500) return 'provider_unavailable';
-  return 'internal_provider_error';
-}
 
 async function* parseSse(
   response: Response,
@@ -110,12 +88,7 @@ export class OpenAITransport implements TransportAdapter {
     });
 
     if (!response.ok) {
-      throw new APIProviderError({
-        category: errorCategory(response.status),
-        message: await readErrorMessage(response),
-        statusCode: response.status,
-        retryable: response.status === 429 || response.status >= 500,
-      });
+      throw await openAIHttpError(response);
     }
 
     try {
@@ -152,12 +125,7 @@ export class OpenAITransport implements TransportAdapter {
     });
 
     if (!response.ok) {
-      throw new APIProviderError({
-        category: errorCategory(response.status),
-        message: await readErrorMessage(response),
-        statusCode: response.status,
-        retryable: response.status === 429 || response.status >= 500,
-      });
+      throw await openAIHttpError(response);
     }
 
     yield {

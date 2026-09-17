@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { withFileLock, atomicJson } from './storage/FileTransaction.js';
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 export type StoredJobState =
   | "RECEIVED"
@@ -54,6 +55,7 @@ export class PersistentJobStore {
   }
 
   async claim(jobId: string): Promise<JobClaimResult> {
+    return withFileLock(this.filePath, async () => {
     const data = await this.load();
     const existing = data.jobs[jobId];
 
@@ -69,6 +71,7 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return { created: true, record };
+    });
   }
 
   async set(
@@ -76,6 +79,7 @@ export class PersistentJobStore {
     state: StoredJobState,
     reportId?: string,
   ): Promise<StoredJob> {
+    return withFileLock(this.filePath, async () => {
     const data = await this.load();
     const existing = data.jobs[jobId];
     const record: StoredJob = {
@@ -88,6 +92,7 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return record;
+    });
   }
 
   async recordReport(
@@ -96,6 +101,7 @@ export class PersistentJobStore {
     reportText: string,
     reportId?: string,
   ): Promise<StoredJob> {
+    return withFileLock(this.filePath, async () => {
     if (!reportText.trim()) {
       throw new Error("Persisted job report text must not be empty.");
     }
@@ -117,9 +123,11 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return record;
+    });
   }
 
   async markReportDeliveryAttempt(jobId: string): Promise<StoredJob> {
+    return withFileLock(this.filePath, async () => {
     const data = await this.load();
     const existing = data.jobs[jobId];
 
@@ -138,12 +146,14 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return record;
+    });
   }
 
   async markReportDeliveryFailed(
     jobId: string,
     error: string,
   ): Promise<StoredJob> {
+    return withFileLock(this.filePath, async () => {
     const data = await this.load();
     const existing = data.jobs[jobId];
 
@@ -159,9 +169,11 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return record;
+    });
   }
 
   async markReportDelivered(jobId: string): Promise<StoredJob> {
+    return withFileLock(this.filePath, async () => {
     const data = await this.load();
     const existing = data.jobs[jobId];
 
@@ -181,6 +193,7 @@ export class PersistentJobStore {
     data.jobs[jobId] = record;
     await this.save(data);
     return record;
+    });
   }
 
   async markInterrupted(jobId: string): Promise<StoredJob> {
@@ -204,9 +217,6 @@ export class PersistentJobStore {
   }
 
   private async save(data: JobStoreData): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const tempPath = this.filePath + ".tmp";
-    await writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-    await rename(tempPath, this.filePath);
+    await atomicJson(this.filePath, data);
   }
 }

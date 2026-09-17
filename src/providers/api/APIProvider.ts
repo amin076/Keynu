@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import type { AIProvider, AIProviderStartOptions } from '../AIProvider.js';
 import type { ProviderCapabilities } from '../ProviderCapabilities.js';
 import { createProviderResult, type ProviderResult } from '../ProviderResult.js';
@@ -121,6 +122,7 @@ export class APIProvider implements AIProvider {
     const errors: APIProviderError[] = [];
 
     for (let attempt = 1; attempt <= this.config.retryCount + 1; attempt += 1) {
+      if (request.signal?.aborted) throw new APIProviderError({ category: 'cancelled', message: 'API request cancelled.', retryable: false });
       const startedAt = Date.now();
       const controller = new AbortController();
       const timeout = setTimeout(() => {
@@ -128,16 +130,16 @@ export class APIProvider implements AIProvider {
       }, this.config.timeoutMs);
       const signal = this.combineSignals(request.signal, controller.signal);
 
-      await this.log?.({
-        type: 'request',
-        providerId: this.id,
-        requestId: request.id,
-        endpoint: this.config.endpoint,
-        model: request.model ?? this.config.model,
-        attempt,
-      });
-
       try {
+        await this.log?.({
+          type: 'request',
+          providerId: this.id,
+          requestId: request.id,
+          endpoint: this.config.endpoint,
+          model: request.model ?? this.config.model,
+          attempt,
+        });
+
         const response = await this.transport.execute(
           request,
           {
@@ -163,7 +165,11 @@ export class APIProvider implements AIProvider {
         return response;
       } catch (error) {
         clearTimeout(timeout);
-        const normalized = normalizeAPIError(error);
+        const normalized = request.signal?.aborted
+          ? new APIProviderError({ category: 'cancelled', message: 'API request cancelled.', retryable: false })
+          : controller.signal.aborted
+            ? new APIProviderError({ category: 'timeout', message: 'API request timed out.', retryable: true })
+            : normalizeAPIError(error);
         errors.push(normalized);
 
         await this.log?.({
@@ -182,6 +188,12 @@ export class APIProvider implements AIProvider {
         if (!normalized.retryable || attempt > this.config.retryCount) {
           throw normalized;
         }
+        const retryAfter = normalized.metadata?.retryAfterMs;
+        const backoff = Math.min(30000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
+        const waitMs = typeof retryAfter === 'number' ? Math.max(backoff, retryAfter) : backoff;
+        // Defer long server-requested delays rather than retrying too early.
+        if (waitMs > 60000) throw normalized;
+        await delay(waitMs, undefined, { signal: request.signal });
       }
     }
 
@@ -256,15 +268,6 @@ export class APIProvider implements AIProvider {
     left: AbortSignal | undefined,
     right: AbortSignal,
   ): AbortSignal {
-    if (!left) return right;
-    if (left.aborted) return left;
-
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-
-    left.addEventListener('abort', abort, { once: true });
-    right.addEventListener('abort', abort, { once: true });
-
-    return controller.signal;
+    return left ? AbortSignal.any([left, right]) : right;
   }
 }
