@@ -17,6 +17,7 @@ export type ActiveMissionResolutionReason =
 
 export type ActiveMissionResolution = {
   projectId: string;
+  projectRoot: string;
   missionId: string;
   missionTitle: string;
   currentMilestone: string;
@@ -155,6 +156,7 @@ export class ActiveMissionResolver {
         blocked: false,
         resolution: {
           projectId: selection.project.id,
+          projectRoot: selection.project.root,
           missionId: selection.mission.id,
           missionTitle: selection.mission.title,
           currentMilestone: selection.mission.currentMilestone,
@@ -179,6 +181,7 @@ export class ActiveMissionResolver {
         blocked: true,
         resolution: {
           projectId: "",
+          projectRoot: "",
           missionId: "",
           missionTitle: "",
           currentMilestone: "",
