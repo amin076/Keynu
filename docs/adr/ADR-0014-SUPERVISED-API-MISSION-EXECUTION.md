@@ -1,6 +1,6 @@
 # ADR-0014: Supervised API mission execution
 
-Status: Accepted for this implementation branch, 2026-09-17.
+Status: Accepted, 2026-09-17. Extended by ADR-0015 for shared adapter locks, monitoring and schedules.
 
 ## Problem
 

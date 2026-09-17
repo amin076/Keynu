@@ -256,3 +256,7 @@ npm run mission -- status examples/execution/config.json
 After configuring API credentials locally, use `mission -- run` or `mission -- watch`
 with the same config. `mission -- serve` exposes the token-protected local HTTP API.
 No API calls or background service start merely from installing/building Keynu.
+
+The follow-up worker also provides intermediate progress reviews, bounded recurring plans,
+shared adapter ownership and a supervised-plans panel on Mission Control's Missions page.
+See [supervision follow-up](docs/AUDIT/KEYNU_SUPERVISION_FOLLOWUP_2026-09-17.md).

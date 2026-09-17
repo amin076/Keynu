@@ -21,6 +21,8 @@ jobs:
         run: |
           $testFiles = @(
             'dist/runtime/tests/AuditRegressions.test.js',
+            'dist/runtime/tests/ProjectExecutionLock.test.js',
+            'dist/mission/execution/tests/ExecutionSupervision.test.js',
             'dist/runtime/tests/AuditBoundaryRegressions.test.js',
             'dist/mission/execution/tests/MissionExecution.test.js',
             'dist/mission/execution/tests/ApiExecution.test.js',

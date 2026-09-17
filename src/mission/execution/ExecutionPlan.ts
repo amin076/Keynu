@@ -6,11 +6,15 @@ export const FunctionCall = z.object({ name: z.string().min(1), args: z.record(z
 export const ExecutionPlan = z.object({
   id, projectId: id, projectRoot: z.string().min(1), goal: z.string().min(1).max(16000),
   rules: z.array(z.string().max(4000)).max(50).default([]),
+  notBefore: z.iso.datetime().optional(),
+  recurrence: z.object({ intervalMs: z.number().int().min(60000).max(2678400000),
+    maxRuns: z.number().int().min(2).max(365) }).strict().optional(),
   steps: z.array(z.object({
     id, goal: z.string().min(1).max(16000), dependsOn: z.array(id).default([]),
     allowedFunctions: z.array(z.string().min(1)).min(1),
     verification: z.array(FunctionCall).min(1),
     maxAiCalls: z.number().int().min(2).max(100).default(12),
+    reviewEveryActions: z.number().int().min(0).max(20).default(3),
   }).strict()).min(1).max(200),
 }).strict().superRefine((plan, ctx) => {
   const ids = new Set(plan.steps.map(step => step.id));
@@ -41,9 +45,11 @@ export const ReviewDecision = z.object({ approved: z.boolean(), reason: z.string
   nextSteps: z.array(z.string().max(2000)).max(20) }).strict();
 export type StepState = {
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'BLOCKED' | 'INTERRUPTED';
-  aiCalls: number; updatedAt: string; reason?: string; nextSteps?: string[];
+  aiCalls: number; successfulActions?: number; updatedAt: string; reason?: string; nextSteps?: string[];
+  phase?: 'PLANNING' | 'FUNCTION' | 'PROGRESS_REVIEW' | 'VERIFICATION' | 'FINAL_REVIEW' | 'IDLE';
+  action?: string; lastHeartbeatAt?: string;
   continuation?: ContinuationContract;
 };
-export type StoredPlan = { definition: ExecutionPlan; steps: Record<string, StepState> };
-export type ExecutionDatabase = { version: 1; plans: Record<string, StoredPlan> };
+export type StoredPlan = { definition: ExecutionPlan; steps: Record<string, StepState>; nextPlanId?: string };
+export type ExecutionDatabase = { version: 1; paused?: boolean; plans: Record<string, StoredPlan> };
 export type Evidence = { at: string; planId: string; stepId: string; kind: string; data: unknown };

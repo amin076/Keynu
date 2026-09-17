@@ -10,8 +10,8 @@
 - Persistent call budgets, mandatory checks, fail-closed review, interruption detection and explicit recovery.
 - Reads existing `.keynu/memory` documents without overwriting protected mission memory.
 
-This is a new opt-in CLI/API composition. The existing browser dashboard is unchanged and
-does not display these plans yet. It is not already running on your Windows machine.
+This is an opt-in CLI/API composition. Mission Control's Missions page displays these
+plans from the configured local state store. It is not already running on your Windows machine.
 
 ## Quick start (repository root, PowerShell)
 
@@ -39,8 +39,9 @@ npm run mission -- watch examples/execution/config.json
 ```
 
 It does not invent endless work, bypass quota or survive a powered-off machine. For daily
-operation, keep the worker on an always-on machine and arrange OS service startup. Automatic
-OS service installation and calendar recurrence are not implemented in this change.
+operation, keep the worker on an always-on machine and arrange OS service startup. Bounded
+interval recurrence is supported below. OS service installation and calendar/cron scheduling
+are not implemented in this change.
 
 ## Local inbound API
 
@@ -69,7 +70,8 @@ Invoke-RestMethod -Uri http://127.0.0.1:4788/plans -Headers $headers
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:4788/run -Headers $headers
 ```
 
-The HTTP server does not poll automatically: invoke `/run` after adding plans. Do not run
+The HTTP server polls automatically only with `autoRun: true`; otherwise invoke `/run`
+after adding plans. Do not run
 `serve` and `watch` as competing owners of the same store. This loopback endpoint cannot
 be reached directly by a cloud ChatGPT session; a separately designed connector is needed.
 
@@ -130,3 +132,34 @@ replay an ambiguous operation. Completed stages and call budgets survive restart
 A fresh request reconstructs context; it does not depend on chat memory. However, model
 review can be wrong. Keep actual builds/tests and measurable scientific acceptance
 criteria as the basis for approving progress.
+
+## Follow-up: monitoring, ownership and scheduled work
+
+See ADR-0015 and the supervision follow-up audit for the ownership and scheduling contracts.
+
+- Open **Missions** in Mission Control to see supervised plans and their execution phases.
+  Default store is `.keynu/execution` relative to the Keynu process working directory.
+  Set `KEYNU_EXECUTION_STATE_DIR` for a custom store. This dashboard view is read-only.
+- `npm run mission -- monitor examples/execution/config.json` needs no API key and shows
+  readiness, dependency blockers, budgets, heartbeat age and last-progress age.
+- `GET /monitor` provides the same observation through the authenticated local API.
+- `POST /stop` persists a pause and requests stopping between actions. It is not immediate
+  process-tree termination. `POST /run` or explicit CLI `run` clears the pause; `watch`
+  and automatic server polling respect it after restart.
+- Add `"autoRun": true` to trusted server config to poll ready plans every five seconds.
+  Run only one scheduler/server per plan store.
+- Add a UTC `notBefore` timestamp to delay a plan. Add
+  `"recurrence": {"intervalMs": 86400000, "maxRuns": 7}` for up to seven daily occurrences,
+  including the first. The next occurrence is saved only after all current steps succeed.
+  Each occurrence has fresh per-step budgets: total possible consumption is multiplied
+  by maxRuns. No catch-up burst or OS service installation is performed.
+- Each step defaults to `"reviewEveryActions": 3`. Intermediate reviews consume requests
+  from maxAiCalls and can stop drift. Set 0 only to disable intermediate checks; final
+  checks/review remain mandatory. Size the budget to include these reviews.
+- Browser/API operations routed through the shared command/filesystem/PowerShell adapters
+  serialize on the same Git checkout, including its subdirectories. Conflicts time out
+  after five seconds. External drivers/editors remain outside the lock; use separate
+  worktrees when separate AIs pursue different goals.
+
+`examples/execution/keynu-daily-audit.plan.json` demonstrates a finite recurring audit.
+It is an example, not a plan installed or started automatically by this change.

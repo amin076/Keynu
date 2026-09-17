@@ -41,5 +41,8 @@ try {
   }
   assert.equal(finished, true);
   assert.equal((await runner.store.read()).plans['api-plan']?.steps.list?.status, 'COMPLETED');
+  assert.equal((await fetch(`${url}/monitor`, { headers })).status, 200);
+  assert.equal((await fetch(`${url}/stop`, { method: 'POST', headers })).status, 202);
+  assert.equal((await new ExecutionPlanStore(join(directory, 'state')).read()).paused, true, 'Stop persists across server restart');
   console.log('Inbound API authentication, origin rejection, project capability scope and persistence passed.');
 } finally { server.close(); server.closeAllConnections(); await once(server, 'close'); await rm(directory, { recursive: true, force: true }); }

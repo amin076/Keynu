@@ -1,3 +1,4 @@
+import { withProjectExecutionLock } from '../../runtime/storage/ProjectExecutionLock.js';
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -7,7 +8,7 @@ import {
 } from "./powershell-patch.js";
 import { handleProcessManagerPayload } from "./process-manager/process-manager-adapter.js";
 
-export async function handlePowerShellKapJob(
+async function handlePowerShellKapJobUnlocked(
   job: PowerShellPatchJob,
   options: PowerShellPatchRunOptions = {},
 ) {
@@ -36,4 +37,8 @@ export async function handlePowerShellKapJob(
   const reportPath = join(reportDir, job.id + ".runtime.report.json");
   writeFileSync(reportPath, JSON.stringify(report, null, 2), "utf8");
   return report;
+}
+
+export async function handlePowerShellKapJob(job: PowerShellPatchJob, options: PowerShellPatchRunOptions = {}) {
+  return withProjectExecutionLock(job.payload.cwd, () => handlePowerShellKapJobUnlocked(job, options));
 }

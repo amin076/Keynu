@@ -1,5 +1,7 @@
 # Keynu architecture and runtime audit — 2026-09-17
 
+This records the first audit checkpoint. See [supervision follow-up](KEYNU_SUPERVISION_FOLLOWUP_2026-09-17.md) for subsequent changes.
+
 Base inspected: `5981901` (main at checkout). Implementation branch:
 `audit/keynu-supervised-api-runtime`.
 

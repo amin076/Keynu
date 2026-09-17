@@ -1,5 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { executeCommand } from "../../runtime/CommandExecutor.js";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { assertSafeCommand, assertSafeCwd, assertSafeRelativePath } from "./powershell-safety.js";
@@ -13,14 +12,6 @@ import type {
   PowerShellWriteFileSpec,
 } from "./powershell-types.js";
 
-const execFileAsync = promisify(execFile);
-
-function normalizeCommand(command: string): string {
-  if (process.platform === "win32" && command.toLowerCase() === "npm") return "npm.cmd";
-  if (process.platform === "win32" && command.toLowerCase() === "npx") return "npx.cmd";
-  return command;
-}
-
 export async function runPowerShellCommand(
   cwd: string,
   spec: PowerShellCommandSpec,
@@ -32,21 +23,15 @@ export async function runPowerShellCommand(
 
   const startedAt = new Date().toISOString();
   const started = Date.now();
-  const safeCommand = normalizeCommand(spec.command);
 
   try {
-    const result = await execFileAsync(safeCommand, args, {
-      cwd,
-      windowsHide: true,
-      timeout: spec.timeoutMs ?? 120000,
-      maxBuffer: 1024 * 1024 * 20,
-      shell: process.platform === "win32",
-    });
+    const result = await executeCommand({ command: spec.command, args, timeoutMs: spec.timeoutMs ?? 120000 }, cwd);
 
     return {
       command: spec.command,
       args,
-      ok: true,
+      ok: result.ok,
+      error: result.error,
       stdout: result.stdout,
       stderr: result.stderr,
       startedAt,

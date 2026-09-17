@@ -1,3 +1,4 @@
+import { withProjectExecutionLock } from '../../runtime/storage/ProjectExecutionLock.js';
 import {
   access,
   lstat,
@@ -47,7 +48,7 @@ function assertGenericWriteAllowed(relativePath: string): void {
   }
 }
 
-export async function executeFileSystemRequest(
+async function executeFileSystemRequestUnlocked(
   cwd: string,
   request: FileSystemRequest,
 ): Promise<FileSystemResult> {
@@ -103,4 +104,8 @@ export async function executeFileSystemRequest(
         return { summary: "Path checked.", data: { exists: false } };
       }
   }
+}
+
+export async function executeFileSystemRequest(cwd: string, request: FileSystemRequest): Promise<FileSystemResult> {
+  return withProjectExecutionLock(cwd, () => executeFileSystemRequestUnlocked(cwd, request));
 }
