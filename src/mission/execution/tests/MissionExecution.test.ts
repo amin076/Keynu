@@ -101,6 +101,30 @@ try {
   }
   await writeFile(script, 'process.exit(0)');
   await assert.rejects(registry.invoke('fixture.echo', { text: 'changed' }, context, ['fixture.echo']), /changed/);
+  // One reasoning decision can safely fan out into multiple deterministic actions.
+  await store.add({ id: 'amplified', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Amplify one decision',
+    steps: [{ ...step, allowedFunctions: ['project.list'], verification: [{ name: 'project.list', args: {} }], maxAiCalls: 4 }] });
+  let amplifiedDecisions = 0;
+  const amplified: ExecutionAgent = {
+    decide: async () => {
+      amplifiedDecisions++;
+      return amplifiedDecisions === 1
+        ? { kind: 'batch' as const, calls: [
+          { name: 'project.list', args: {} },
+          { name: 'project.list', args: {} },
+        ] }
+        : { kind: 'finish' as const, summary: 'Batch evidence collected', nextSteps: [] };
+    },
+    review: async () => ({ approved: true, reason: 'Batch and verification evidence are present', nextSteps: [] }),
+  };
+  await new MissionExecutionRunner(store, registry, amplified).run();
+  const amplifiedMetrics = await store.metrics('amplified');
+  assert.equal(amplifiedMetrics.aiCalls, 3, 'batch decision + finish + review should use three AI calls');
+  assert.equal(amplifiedMetrics.functionActions, 2);
+  assert.equal(amplifiedMetrics.verificationActions, 1);
+  assert.equal(amplifiedMetrics.actionsPerAiCall, 1);
+  assert.equal((await store.read()).plans.amplified?.steps.audit?.status, 'COMPLETED');
+
   // Corruption must never reset state or budgets.
   await writeFile(store.file, '{invalid'); await assert.rejects(store.read());
   console.log('Mission execution: concurrency, dependencies, restart, budgets, verification, schemas and script arguments passed.');
