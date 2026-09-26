@@ -85,6 +85,53 @@ export class MissionExecutionRunner {
           reason: 'Execute the next approved plan step.', nextAction: step.id } });
       try {
         this.functions.describe(step.allowedFunctions);
+
+        // Reasoning gate: an explicitly pre-approved deterministic step does not
+        // reserve or invoke any AI call. It still uses the same allowlist,
+        // schemas, evidence persistence and verification as reasoning steps.
+        if (step.executionMode === 'deterministic') {
+          await this.store.evidence(plan.id, step.id, 'reasoning-gate', {
+            decision: 'BYPASS_AI',
+            reason: 'Step contains only pre-approved deterministic actions and verification.',
+            actionCount: step.deterministicActions.length,
+          });
+          for (const action of step.deterministicActions) {
+            if (signal?.aborted) throw new Error('Worker stopped before next deterministic action.');
+            await this.store.evidence(plan.id, step.id, 'function-intent', action);
+            const result = await this.functions.invoke(action.name, action.args,
+              { projectRoot: plan.projectRoot }, step.allowedFunctions);
+            await this.store.evidence(plan.id, step.id, 'function-result', { call: action, result, reasoningBypassed: true });
+            if (!result.ok) throw new Error(`Function failed: ${action.name}`);
+          }
+          for (const check of step.verification) {
+            await this.store.evidence(plan.id, step.id, 'verification-intent', check);
+            const result = await this.functions.invoke(check.name, check.args,
+              { projectRoot: plan.projectRoot }, step.allowedFunctions);
+            await this.store.evidence(plan.id, step.id, 'verification', { check, result, reasoningBypassed: true });
+            if (!result.ok) throw new Error(`Verification failed: ${check.name}`);
+          }
+          const data = await this.store.read();
+          const complete = Object.entries(data.plans[plan.id]!.steps)
+            .every(([id, state]) => id === step.id || state.status === 'COMPLETED');
+          await this.store.update(plan.id, step.id, {
+            status: 'COMPLETED',
+            reason: 'Pre-approved deterministic actions and verification passed; AI reasoning was bypassed.',
+            nextSteps: [],
+            continuation: {
+              decision: complete ? 'COMPLETED' : 'LOCAL_CONTINUE',
+              owner: complete ? 'none' : 'mission_engine',
+              missionComplete: complete,
+              reason: 'Deterministic execution and verification passed without an AI call.',
+              nextAction: complete ? 'Mission plan complete.' : 'Select the next dependency-ready step.',
+            },
+          });
+          return;
+        }
+
+        await this.store.evidence(plan.id, step.id, 'reasoning-gate', {
+          decision: 'REQUIRE_AI',
+          reason: 'Step is marked reasoning and requires an agent decision.',
+        });
         while (true) {
           if (signal?.aborted) throw new Error('Worker stopped before next action.');
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
