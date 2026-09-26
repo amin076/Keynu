@@ -75,6 +75,36 @@ export class ExecutionPlanStore {
     const record: Evidence = { at: new Date().toISOString(), planId, stepId, kind, data };
     await writeFile(join(directory, `${Date.now()}-${randomUUID()}.json`), JSON.stringify(record, null, 2), { flag: 'wx', mode: 0o600 });
   }
+  async metrics(planId: string): Promise<{
+    planId: string;
+    aiCalls: number;
+    functionActions: number;
+    verificationActions: number;
+    completedSteps: number;
+    blockedSteps: number;
+    actionsPerAiCall: number;
+  }> {
+    const data = await this.read();
+    const plan = data.plans[planId];
+    if (!plan) throw new Error('Unknown plan.');
+    const history = await this.history(planId);
+    const aiCalls = Object.values(plan.steps).reduce((sum, state) => sum + state.aiCalls, 0);
+    const functionActions = history.filter(item => item.kind === 'function-result').length;
+    const verificationActions = history.filter(item => item.kind === 'verification').length;
+    const completedSteps = Object.values(plan.steps).filter(state => state.status === 'COMPLETED').length;
+    const blockedSteps = Object.values(plan.steps).filter(state => state.status === 'BLOCKED').length;
+    const totalActions = functionActions + verificationActions;
+    return {
+      planId,
+      aiCalls,
+      functionActions,
+      verificationActions,
+      completedSteps,
+      blockedSteps,
+      actionsPerAiCall: aiCalls === 0 ? 0 : Number((totalActions / aiCalls).toFixed(2)),
+    };
+  }
+
   async history(planId: string): Promise<Evidence[]> {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(planId)) throw new Error('Invalid plan id.');
     const directory = join(this.directory, 'evidence', planId);
