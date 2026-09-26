@@ -83,6 +83,8 @@ export class ExecutionPlanStore {
     completedSteps: number;
     blockedSteps: number;
     actionsPerAiCall: number;
+    aiBypassedSteps: number;
+    reasoningRequiredSteps: number;
   }> {
     const data = await this.read();
     const plan = data.plans[planId];
@@ -94,6 +96,9 @@ export class ExecutionPlanStore {
     const completedSteps = Object.values(plan.steps).filter(state => state.status === 'COMPLETED').length;
     const blockedSteps = Object.values(plan.steps).filter(state => state.status === 'BLOCKED').length;
     const totalActions = functionActions + verificationActions;
+    const gates = history.filter(item => item.kind === 'reasoning-gate');
+    const aiBypassedSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'BYPASS_AI').length;
+    const reasoningRequiredSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'REQUIRE_AI').length;
     return {
       planId,
       aiCalls,
@@ -102,6 +107,8 @@ export class ExecutionPlanStore {
       completedSteps,
       blockedSteps,
       actionsPerAiCall: aiCalls === 0 ? 0 : Number((totalActions / aiCalls).toFixed(2)),
+      aiBypassedSteps,
+      reasoningRequiredSteps,
     };
   }
 
