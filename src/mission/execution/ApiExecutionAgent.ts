@@ -26,7 +26,7 @@ export class ApiExecutionAgent implements ExecutionAgent {
   }
   async decide(context: unknown) {
     return AgentDecision.parse(await this.request(this.worker,
-      'You execute one approved mission step. Choose exactly one registered function with {"kind":"call","name":"...","args":{...}}, or finish with {"kind":"finish","summary":"...","nextSteps":["..."]}. Use evidence to avoid repeating completed actions. Do not claim changes or checks you have not observed. Never broaden the approved goal.', context));
+      'You execute one approved mission step. Prefer one bounded batch when several deterministic actions are already justified: {"kind":"batch","calls":[{"name":"...","args":{}},...]}. Use {"kind":"call","name":"...","args":{}} when only one action is justified, or finish with {"kind":"finish","summary":"...","nextSteps":["..."]}. A batch may contain at most 12 registered calls and must preserve a safe sequential order. Use evidence to avoid repeating completed actions. Do not claim changes or checks you have not observed. Never broaden the approved goal.', context));
   }
   async review(context: unknown) {
     return ReviewDecision.parse(await this.request(this.reviewer,
