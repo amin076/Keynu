@@ -23,7 +23,8 @@ Integration Hub compatibility bridge
    |      +-- CLIConnector ---- Engineering Runtime
    |      +-- FileConnector --- Engineering Runtime
    |      +-- HTTPConnector --- manifest-governed HTTP/HTTPS
-   |      +-- future: MCP / Browser / WebSocket
+   |      +-- McpConnector ---- stdio subprocess / HTTP transports
+   |      +-- future: Browser / WebSocket
    |
    +-- optional Integration Packs
           +-- Melakat domain semantics
