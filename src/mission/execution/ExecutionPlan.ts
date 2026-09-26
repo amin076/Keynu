@@ -34,6 +34,7 @@ export type ExecutionPlan = z.infer<typeof ExecutionPlan>;
 export type ExecutionStep = ExecutionPlan['steps'][number];
 export const AgentDecision = z.discriminatedUnion('kind', [
   FunctionCall.extend({ kind: z.literal('call') }).strict(),
+  z.object({ kind: z.literal('batch'), calls: z.array(FunctionCall).min(1).max(12) }).strict(),
   z.object({ kind: z.literal('finish'), summary: z.string().min(1).max(16000),
     nextSteps: z.array(z.string().max(2000)).max(20) }).strict(),
 ]);

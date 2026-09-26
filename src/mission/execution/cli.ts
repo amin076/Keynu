@@ -20,13 +20,17 @@ const Config = z.object({ stateDirectory: z.string().default('.keynu/execution')
 
 async function main(): Promise<void> {
   const [command, configPath, ...args] = process.argv.slice(2);
-  if (!configPath || !['add', 'status', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
-    throw new Error('Usage: npm run mission -- <add|status|run|watch|resume|serve> config.json [plan.json | planId stepId]');
+  if (!configPath || !['add', 'status', 'metrics', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
+    throw new Error('Usage: npm run mission -- <add|status|metrics|run|watch|resume|serve> config.json [plan.json | planId stepId]');
   }
   const base = dirname(resolve(configPath));
   const config = Config.parse(JSON.parse(await readFile(configPath, 'utf8')));
   const store = new ExecutionPlanStore(resolve(base, config.stateDirectory));
   if (command === 'status') { console.log(JSON.stringify(await store.read(), null, 2)); return; }
+  if (command === 'metrics') {
+    if (!args[0]) throw new Error('Plan id required.');
+    console.log(JSON.stringify(await store.metrics(args[0]), null, 2)); return;
+  }
   if (command === 'add') {
     if (!args[0]) throw new Error('Plan file required.');
     const plan = ExecutionPlan.parse(JSON.parse(await readFile(args[0], 'utf8')));

@@ -58,20 +58,25 @@ export class MissionExecutionRunner {
   }
   private async context(plan: ExecutionPlan, step: ExecutionStep): Promise<unknown> {
     const database = await this.store.read();
+    // Reasoning gets compact evidence, not a repository dump. Deterministic state
+    // remains in Keynu and can be queried through approved functions when needed.
     const memory = new MemoryLoader(plan.projectRoot).loadAll().filter(item => item.exists)
-      .map(item => ({ name: item.name, content: item.content?.slice(0, 4000), truncated: (item.content?.length ?? 0) > 4000 }));
-    const history = (await this.store.history(plan.id)).slice(-20).map(item => {
+      .map(item => ({ name: item.name, excerpt: item.content?.slice(0, 1200),
+        truncated: (item.content?.length ?? 0) > 1200 }));
+    const history = (await this.store.history(plan.id)).slice(-8).map(item => {
       const text = JSON.stringify(item.data);
-      return { ...item, data: text.length <= 12000 ? item.data : { excerpt: text.slice(0, 12000), truncated: true } };
+      return { ...item, data: text.length <= 3000 ? item.data : { excerpt: text.slice(0, 3000), truncated: true } };
     });
     const priorPlans = Object.values(database.plans).filter(item => item.definition.projectRoot === plan.projectRoot)
-      .slice(-10).map(item => ({ id: item.definition.id, goal: item.definition.goal, steps: item.steps }));
+      .slice(-3).map(item => ({ id: item.definition.id, goal: item.definition.goal, steps: item.steps }));
     const bounded = (value: unknown, limit: number): unknown => {
       const text = JSON.stringify(value);
       return text.length <= limit ? value : { excerpt: text.slice(0, limit), truncated: true };
     };
-    return { goal: plan.goal, rules: plan.rules, step, functions: this.functions.describe(step.allowedFunctions),
-      memory: bounded(memory, 16000), priorPlans: bounded(priorPlans, 16000), history: bounded(history.reverse(), 48000) };
+    const context = { goal: plan.goal, rules: plan.rules.slice(0, 8), step,
+      functions: this.functions.describe(step.allowedFunctions),
+      memory: bounded(memory, 5000), priorPlans: bounded(priorPlans, 3000), history: bounded(history.reverse(), 8000) };
+    return bounded(context, 20000);
   }
   private async execute(plan: ExecutionPlan, step: ExecutionStep, signal?: AbortSignal): Promise<void> {
     await withFileLock(join(plan.projectRoot, '.keynu', 'state', 'mission-execution'), async () => {
@@ -85,12 +90,19 @@ export class MissionExecutionRunner {
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
           const decision = AgentDecision.parse(await this.agent.decide(await this.context(plan, step)));
           await this.store.evidence(plan.id, step.id, 'decision', decision);
-          if (decision.kind === 'call') {
-            // Intent is persisted before a possibly non-idempotent operation.
-            const result = await this.functions.invoke(decision.name, decision.args,
-              { projectRoot: plan.projectRoot }, step.allowedFunctions);
-            await this.store.evidence(plan.id, step.id, 'function-result', { call: decision, result });
-            if (!result.ok) throw new Error(`Function failed: ${decision.name}`);
+          if (decision.kind === 'call' || decision.kind === 'batch') {
+            const calls = decision.kind === 'batch' ? decision.calls : [decision];
+            await this.store.evidence(plan.id, step.id, 'execution-batch', {
+              reasoningCall: true, actionCount: calls.length,
+            });
+            for (const call of calls) {
+              // Each intent is persisted before a possibly non-idempotent operation.
+              await this.store.evidence(plan.id, step.id, 'function-intent', call);
+              const result = await this.functions.invoke(call.name, call.args,
+                { projectRoot: plan.projectRoot }, step.allowedFunctions);
+              await this.store.evidence(plan.id, step.id, 'function-result', { call, result });
+              if (!result.ok) throw new Error(`Function failed: ${call.name}`);
+            }
             continue;
           }
           for (const check of step.verification) {
