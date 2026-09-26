@@ -11,6 +11,7 @@ import { ExecutionPlan } from './ExecutionPlan.js';
 import { ExecutionPlanStore } from './ExecutionPlanStore.js';
 import { ApiExecutionAgent } from './ApiExecutionAgent.js';
 import { MissionExecutionRunner } from './MissionExecutionRunner.js';
+import { MissionImpactReporter } from './MissionImpactReporter.js';
 
 const Config = z.object({ stateDirectory: z.string().default('.keynu/execution'),
   concurrency: z.number().int().min(1).max(4).default(3),
@@ -20,8 +21,8 @@ const Config = z.object({ stateDirectory: z.string().default('.keynu/execution')
 
 async function main(): Promise<void> {
   const [command, configPath, ...args] = process.argv.slice(2);
-  if (!configPath || !['add', 'status', 'metrics', 'escalation', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
-    throw new Error('Usage: npm run mission -- <add|status|metrics|escalation|run|watch|resume|serve> config.json [plan.json | planId stepId]');
+  if (!configPath || !['add', 'status', 'metrics', 'report', 'escalation', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
+    throw new Error('Usage: npm run mission -- <add|status|metrics|report|escalation|run|watch|resume|serve> config.json [plan.json | planId stepId]');
   }
   const base = dirname(resolve(configPath));
   const config = Config.parse(JSON.parse(await readFile(configPath, 'utf8')));
@@ -30,6 +31,12 @@ async function main(): Promise<void> {
   if (command === 'metrics') {
     if (!args[0]) throw new Error('Plan id required.');
     console.log(JSON.stringify(await store.metrics(args[0]), null, 2)); return;
+  }
+  if (command === 'report') {
+    if (!args[0]) throw new Error('Plan id required.');
+    const report = await new MissionImpactReporter(store).build(args[0]);
+    console.log(args[1] === '--json' ? JSON.stringify(report, null, 2) : MissionImpactReporter.markdown(report));
+    return;
   }
   if (command === 'escalation') {
     if (!args[0] || !args[1]) throw new Error('Plan id and step id required.');

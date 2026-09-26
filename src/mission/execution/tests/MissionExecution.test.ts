@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ExecutionPlan } from '../ExecutionPlan.js';
 import { ExecutionPlanStore } from '../ExecutionPlanStore.js';
 import { MissionExecutionRunner } from '../MissionExecutionRunner.js';
+import { MissionImpactReporter } from '../MissionImpactReporter.js';
 import type { ExecutionAgent } from '../ApiExecutionAgent.js';
 import { createBuiltinFunctions } from '../../../engineering/functions/BuiltinFunctions.js';
 import { registerScript } from '../../../engineering/functions/ScriptFunctions.js';
@@ -243,6 +244,22 @@ try {
   assert.equal(unsafeState?.recoveryAttempts, 1);
   assert.equal(unsafeState?.aiCalls, 1);
   assert.ok((await store.history('unsafe-recovery')).some(item => item.kind === 'recovery-failed'));
+
+  // Impact reports must be derived from persisted mission state and evidence.
+  const impact = await new MissionImpactReporter(store).build('auto-recovery');
+  assert.equal(impact.mission.finalStatus, 'COMPLETED');
+  assert.equal(impact.mission.totalSteps, 1);
+  assert.equal(impact.mission.completedSteps, 1);
+  assert.equal(impact.reasoning.aiCalls, 1);
+  assert.equal(impact.reasoning.aiBypassedSteps, 1);
+  assert.equal(impact.resilience.escalationPackets, 1);
+  assert.equal(impact.resilience.recoveryAttempts, 1);
+  assert.equal(impact.resilience.successfulRecoveries, 1);
+  assert.ok(impact.evidence.records > 0);
+  const impactMarkdown = MissionImpactReporter.markdown(impact);
+  assert.match(impactMarkdown, /Keynu Mission Impact Report/);
+  assert.match(impactMarkdown, /runtime observations/);
+  assert.match(impactMarkdown, /not Bobcoin savings/);
 
   // Corruption must never reset state or budgets.
   await writeFile(store.file, '{invalid'); await assert.rejects(store.read());
