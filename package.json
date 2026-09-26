@@ -23,7 +23,8 @@
     "test:dashboard-bom": "npm run build && node dist/app/tests/dashboardServerBom.test.js",
     "test:browser-reminder": "npm run build && node dist/browser/tests/BrowserAgentReminderIntegration.test.js",
     "mission": "node dist/mission/execution/cli.js",
-    "reasoning:brief": "node dist/mission/reasoningBriefCli.js"
+    "reasoning:brief": "node dist/mission/reasoningBriefCli.js",
+    "github-workspace": "node dist/workspace/githubMissionWorkspaceCli.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
