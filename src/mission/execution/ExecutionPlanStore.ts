@@ -50,7 +50,7 @@ export class ExecutionPlanStore {
         if (nested(a, b) || nested(b, a)) throw new Error('Overlapping project roots must share one project root or use separate worktrees.');
       }
       data.plans[plan.id] = { definition: plan, steps: Object.fromEntries(plan.steps.map(step => [step.id,
-        { status: 'PENDING', aiCalls: 0, updatedAt: new Date().toISOString() }])) };
+        { status: 'PENDING', aiCalls: 0, recoveryAttempts: 0, updatedAt: new Date().toISOString() }])) };
     });
   }
   async update(planId: string, stepId: string, patch: Partial<StepState>): Promise<void> {
@@ -60,6 +60,17 @@ export class ExecutionPlanStore {
       Object.assign(state, patch, { updatedAt: new Date().toISOString() });
     });
   }
+  async reserveRecovery(planId: string, stepId: string, limit: number): Promise<void> {
+    await this.transaction(data => {
+      const state = data.plans[planId]?.steps[stepId];
+      if (!state) throw new Error('Unknown plan step.');
+      const attempts = state.recoveryAttempts ?? 0;
+      if (attempts >= limit) throw new Error('Persistent recovery budget exhausted.');
+      state.recoveryAttempts = attempts + 1;
+      state.updatedAt = new Date().toISOString();
+    });
+  }
+
   async reserveCall(planId: string, stepId: string, limit: number): Promise<void> {
     await this.transaction(data => {
       const state = data.plans[planId]?.steps[stepId];
@@ -87,6 +98,8 @@ export class ExecutionPlanStore {
     reasoningRequiredSteps: number;
     escalationPackets: number;
     escalationCharacters: number;
+    recoveryAttempts: number;
+    successfulRecoveries: number;
   }> {
     const data = await this.read();
     const plan = data.plans[planId];
@@ -102,6 +115,8 @@ export class ExecutionPlanStore {
     const aiBypassedSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'BYPASS_AI').length;
     const reasoningRequiredSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'REQUIRE_AI').length;
     const escalations = history.filter(item => item.kind === 'escalation-ready');
+    const recoveryAttempts = Object.values(plan.steps).reduce((sum, state) => sum + (state.recoveryAttempts ?? 0), 0);
+    const successfulRecoveries = history.filter(item => item.kind === 'recovery-succeeded').length;
     const escalationCharacters = escalations.reduce((sum, item) =>
       sum + Number((item.data as { budget?: { estimatedCharacters?: number } })?.budget?.estimatedCharacters ?? 0), 0);
     return {
@@ -116,6 +131,8 @@ export class ExecutionPlanStore {
       reasoningRequiredSteps,
       escalationPackets: escalations.length,
       escalationCharacters,
+      recoveryAttempts,
+      successfulRecoveries,
     };
   }
 
