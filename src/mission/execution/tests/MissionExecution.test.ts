@@ -125,6 +125,38 @@ try {
   assert.equal(amplifiedMetrics.actionsPerAiCall, 1);
   assert.equal((await store.read()).plans.amplified?.steps.audit?.status, 'COMPLETED');
 
+  // Reasoning gate must spend zero AI calls for explicitly deterministic work.
+  let forbiddenAiCalls = 0;
+  const noAiAgent: ExecutionAgent = {
+    decide: async () => { forbiddenAiCalls++; throw new Error('AI must not be called'); },
+    review: async () => { forbiddenAiCalls++; throw new Error('AI review must not be called'); },
+  };
+  await store.add({ id: 'deterministic', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Run approved local checks without AI',
+    steps: [{
+      ...step,
+      executionMode: 'deterministic',
+      deterministicActions: [
+        { name: 'project.list', args: {} },
+        { name: 'project.list', args: {} },
+      ],
+      allowedFunctions: ['project.list'],
+      verification: [{ name: 'project.list', args: {} }],
+    }] });
+  await new MissionExecutionRunner(store, registry, noAiAgent).run();
+  const deterministicState = (await store.read()).plans.deterministic?.steps.audit;
+  const deterministicMetrics = await store.metrics('deterministic');
+  assert.equal(forbiddenAiCalls, 0);
+  assert.equal(deterministicState?.aiCalls, 0);
+  assert.equal(deterministicState?.status, 'COMPLETED');
+  assert.equal(deterministicMetrics.functionActions, 2);
+  assert.equal(deterministicMetrics.verificationActions, 1);
+  assert.equal(deterministicMetrics.aiBypassedSteps, 1);
+  assert.equal(deterministicMetrics.reasoningRequiredSteps, 0);
+  assert.throws(() => ExecutionPlan.parse({
+    id: 'bad-deterministic', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Reject unsafe deterministic function',
+    steps: [{ ...step, executionMode: 'deterministic', deterministicActions: [{ name: 'project.write', args: {} }] }],
+  }), /Deterministic function not allowed/);
+
   // Corruption must never reset state or budgets.
   await writeFile(store.file, '{invalid'); await assert.rejects(store.read());
   console.log('Mission execution: concurrency, dependencies, restart, budgets, verification, schemas and script arguments passed.');
