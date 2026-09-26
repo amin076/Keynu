@@ -20,8 +20,8 @@ const Config = z.object({ stateDirectory: z.string().default('.keynu/execution')
 
 async function main(): Promise<void> {
   const [command, configPath, ...args] = process.argv.slice(2);
-  if (!configPath || !['add', 'status', 'metrics', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
-    throw new Error('Usage: npm run mission -- <add|status|metrics|run|watch|resume|serve> config.json [plan.json | planId stepId]');
+  if (!configPath || !['add', 'status', 'metrics', 'escalation', 'run', 'watch', 'resume', 'serve'].includes(command ?? '')) {
+    throw new Error('Usage: npm run mission -- <add|status|metrics|escalation|run|watch|resume|serve> config.json [plan.json | planId stepId]');
   }
   const base = dirname(resolve(configPath));
   const config = Config.parse(JSON.parse(await readFile(configPath, 'utf8')));
@@ -30,6 +30,12 @@ async function main(): Promise<void> {
   if (command === 'metrics') {
     if (!args[0]) throw new Error('Plan id required.');
     console.log(JSON.stringify(await store.metrics(args[0]), null, 2)); return;
+  }
+  if (command === 'escalation') {
+    if (!args[0] || !args[1]) throw new Error('Plan id and step id required.');
+    const packet = await store.latestEscalation(args[0], args[1]);
+    if (!packet) throw new Error('No escalation packet found for this step.');
+    console.log(JSON.stringify(packet, null, 2)); return;
   }
   if (command === 'add') {
     if (!args[0]) throw new Error('Plan file required.');
