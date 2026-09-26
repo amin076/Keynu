@@ -6,6 +6,7 @@ import type { FunctionRegistry } from '../../engineering/functions/FunctionRegis
 import type { ExecutionAgent } from './ApiExecutionAgent.js';
 import { ExecutionPlanStore } from './ExecutionPlanStore.js';
 import { AgentDecision, ReviewDecision, type ExecutionPlan, type ExecutionStep } from './ExecutionPlan.js';
+import { EscalationController } from './EscalationController.js';
 
 export class MissionExecutionRunner {
   constructor(readonly store: ExecutionPlanStore, private readonly functions: FunctionRegistry,
@@ -174,9 +175,19 @@ export class MissionExecutionRunner {
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         await this.store.evidence(plan.id, step.id, 'blocked', { reason });
+        const history = await this.store.history(plan.id);
+        const escalation = new EscalationController().build({
+          planId: plan.id,
+          stepId: step.id,
+          goal: step.goal,
+          failure: reason,
+          allowedFunctions: step.allowedFunctions,
+          history,
+        });
+        await this.store.evidence(plan.id, step.id, 'escalation-ready', escalation);
         await this.store.update(plan.id, step.id, { status: 'BLOCKED', reason,
           continuation: { decision: 'BLOCKED', owner: 'user', missionComplete: false,
-            reason, nextAction: 'Inspect evidence and reconcile before resuming.', retryable: false } });
+            reason, nextAction: 'Use the bounded escalation packet for targeted diagnosis before explicit resume.', retryable: false } });
       }
     });
   }
