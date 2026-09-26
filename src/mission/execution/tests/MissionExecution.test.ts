@@ -55,6 +55,14 @@ try {
   assert.equal((await store.read()).plans.failure?.steps.audit?.status, 'BLOCKED');
   assert.equal((await store.read()).plans.failure?.steps.dependent?.status, 'PENDING');
   assert.equal(reviews, 6, 'AI must not override a failing deterministic check');
+  const failureEscalation = await store.latestEscalation('failure', 'audit') as {
+    purpose: string; failure: string; relevantEvidence: unknown[]; budget: { estimatedCharacters: number; maximumCharacters: number };
+  };
+  assert.equal(failureEscalation.purpose, 'FAILURE_ESCALATION');
+  assert.match(failureEscalation.failure, /Verification failed/);
+  assert.ok(failureEscalation.relevantEvidence.length > 0);
+  assert.ok(failureEscalation.budget.estimatedCharacters <= failureEscalation.budget.maximumCharacters);
+  assert.equal((await store.metrics('failure')).escalationPackets, 1);
   await store.add({ id: 'interrupted', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Recover safely', steps: [step] });
   await store.update('interrupted', 'audit', { status: 'RUNNING', aiCalls: 1 });
   await runner.run();
@@ -156,6 +164,26 @@ try {
     id: 'bad-deterministic', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Reject unsafe deterministic function',
     steps: [{ ...step, executionMode: 'deterministic', deterministicActions: [{ name: 'project.write', args: {} }] }],
   }), /Deterministic function not allowed/);
+
+  // A deterministic failure creates a compact escalation packet but still spends zero AI calls.
+  await store.add({ id: 'deterministic-failure', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Fail locally then escalate narrowly',
+    steps: [{
+      ...step,
+      executionMode: 'deterministic',
+      deterministicActions: [{ name: 'test.fail', args: {} }],
+      allowedFunctions: ['test.fail'],
+      verification: [{ name: 'test.fail', args: {} }],
+    }] });
+  await new MissionExecutionRunner(store, registry, noAiAgent).run();
+  const deterministicFailureState = (await store.read()).plans['deterministic-failure']?.steps.audit;
+  const deterministicFailureEscalation = await store.latestEscalation('deterministic-failure', 'audit') as {
+    purpose: string; relevantEvidence: Array<{ kind: string }>; budget: { estimatedCharacters: number };
+  };
+  assert.equal(deterministicFailureState?.aiCalls, 0);
+  assert.equal(deterministicFailureState?.status, 'BLOCKED');
+  assert.equal(deterministicFailureEscalation.purpose, 'FAILURE_ESCALATION');
+  assert.ok(deterministicFailureEscalation.budget.estimatedCharacters <= 6000);
+  assert.ok(deterministicFailureEscalation.relevantEvidence.some(item => item.kind === 'function-result'));
 
   // Corruption must never reset state or budgets.
   await writeFile(store.file, '{invalid'); await assert.rejects(store.read());
