@@ -42,7 +42,7 @@ It contains only:
 
 The default character budget is 8,000 characters. The builder records the estimated size and whether information was truncated.
 
-This is not a claim about provider token or monetary cost. It is an enforceable Keynu-side context boundary.
+Generate a brief after building Keynu:\n\n```bash\nnpm run build\nnpm run reasoning:brief -- <project-id>\n```\n\nOptional environment limits are `KEYNU_REASONING_MAX_CHARS`, `KEYNU_REASONING_MAX_CHANGED_FILES`, and `KEYNU_REASONING_MAX_NEXT_ACTIONS`.\n\nThis is not a claim about provider token or monetary cost. It is an enforceable Keynu-side context boundary.
 
 ## Bob 2.0 hackathon usage
 
