@@ -1,0 +1,34 @@
+{
+  "id": "esbiko-real-improvement-001",
+  "projectId": "esbiko",
+  "projectRoot": "../../../science-web-lab",
+  "goal": "Improve one real, bounded part of the existing Esbiko repository. Discover the improvement from repository evidence, implement the smallest justified change, and leave the project passing its relevant validation without broad refactoring.",
+  "rules": [
+    "Work only inside the Esbiko repository.",
+    "Do not invent a failure or deliberately break working code to demonstrate recovery.",
+    "Inspect before editing and use the guarded project.write SHA for every existing file.",
+    "Choose one bounded improvement supported by repository evidence; do not perform a repository-wide rewrite.",
+    "Do not modify credentials, environment secrets, Firebase project identity, deployment configuration, generated assets, package-lock.json, or production data.",
+    "Do not deploy, publish, push, merge, or contact external services.",
+    "Preserve scientific correctness. Do not change simulation equations or scientific constants unless the repository itself provides sufficient evidence and verification for the change.",
+    "Treat build, lint and repository-owned validation output as evidence, not as proof of scientific correctness.",
+    "If verification fails, use only the bounded escalation evidence for one targeted recovery attempt.",
+    "Do not claim completion until deterministic verification and the independent review pass approve it."
+  ],
+  "steps": [
+    {
+      "id": "discover-and-improve",
+      "goal": "Inspect Esbiko's structure and relevant source/tests, identify one concrete low-risk improvement, implement it with guarded writes, and keep the change tightly scoped.",
+      "allowedFunctions": ["project.list", "project.read", "project.write", "git.status", "esbiko.verify"],
+      "executionMode": "reasoning",
+      "recovery": { "enabled": true, "maxAttempts": 1 },
+      "verification": [
+        { "name": "esbiko.verify", "args": { "script": "build" } },
+        { "name": "esbiko.verify", "args": { "script": "sim:check" } },
+        { "name": "esbiko.verify", "args": { "script": "test:platform-api" } },
+        { "name": "esbiko.verify", "args": { "script": "test:webmcp" } }
+      ],
+      "maxAiCalls": 12
+    }
+  ]
+}

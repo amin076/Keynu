@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "keynu-app-manifest-0.1",
+  "id": "esbiko",
+  "name": "Esbiko",
+  "description": "Interactive science and mathematics learning platform with React, Vite, Firebase, Three.js, Platform API and WebMCP.",
+  "projectId": "esbiko",
+  "rootEnv": "KEYNU_PROJECT_ROOT_ESBIKO",
+  "connectors": [
+    {
+      "id": "npm",
+      "kind": "cli",
+      "config": {
+        "command": "npm",
+        "timeoutMs": 660000
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "build",
+      "description": "Build Esbiko using its repository-owned build script.",
+      "risk": "execute",
+      "connector": "npm",
+      "request": { "args": ["run", "build"], "timeoutMs": 660000 }
+    },
+    {
+      "name": "lint",
+      "description": "Run Esbiko ESLint validation.",
+      "risk": "execute",
+      "connector": "npm",
+      "request": { "args": ["run", "lint"], "timeoutMs": 660000 }
+    },
+    {
+      "name": "simulationCheck",
+      "description": "Run Esbiko's simulation validation script.",
+      "risk": "execute",
+      "connector": "npm",
+      "request": { "args": ["run", "sim:check"], "timeoutMs": 660000 }
+    },
+    {
+      "name": "platformApiTest",
+      "description": "Run Esbiko Platform API tests.",
+      "risk": "execute",
+      "connector": "npm",
+      "request": { "args": ["run", "test:platform-api"], "timeoutMs": 660000 }
+    },
+    {
+      "name": "webmcpTest",
+      "description": "Run Esbiko WebMCP tests.",
+      "risk": "execute",
+      "connector": "npm",
+      "request": { "args": ["run", "test:webmcp"], "timeoutMs": 660000 }
+    }
+  ]
+}
