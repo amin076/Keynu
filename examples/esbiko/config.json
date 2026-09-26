@@ -1,0 +1,20 @@
+{
+  "stateDirectory": "../../.keynu/esbiko-execution",
+  "concurrency": 1,
+  "scripts": [
+    {
+      "name": "esbiko.verify",
+      "description": "Run one approved Esbiko repository-owned build, lint, simulation, Platform API or WebMCP verification script.",
+      "runtime": "node",
+      "script": "./verify-esbiko.mjs",
+      "fields": { "script": "string" },
+      "timeoutMs": 660000
+    }
+  ],
+  "apiProjects": [
+    {
+      "root": "../../../science-web-lab",
+      "allowedFunctions": ["project.list", "project.read", "project.write", "git.status", "esbiko.verify"]
+    }
+  ]
+}
