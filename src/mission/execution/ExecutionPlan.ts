@@ -11,6 +11,10 @@ export const ExecutionPlan = z.object({
     allowedFunctions: z.array(z.string().min(1)).min(1),
     executionMode: z.enum(['reasoning', 'deterministic']).default('reasoning'),
     deterministicActions: z.array(FunctionCall).max(50).default([]),
+    recovery: z.object({
+      enabled: z.boolean().default(false),
+      maxAttempts: z.number().int().min(1).max(3).default(1),
+    }).strict().default({ enabled: false, maxAttempts: 1 }),
     verification: z.array(FunctionCall).min(1),
     maxAiCalls: z.number().int().min(2).max(100).default(12),
   }).strict()).min(1).max(200),
@@ -46,11 +50,16 @@ export const AgentDecision = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('finish'), summary: z.string().min(1).max(16000),
     nextSteps: z.array(z.string().max(2000)).max(20) }).strict(),
 ]);
+export const RepairDecision = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('repair'), calls: z.array(FunctionCall).min(1).max(6),
+    rationale: z.string().min(1).max(4000) }).strict(),
+  z.object({ kind: z.literal('stop'), reason: z.string().min(1).max(4000) }).strict(),
+]);
 export const ReviewDecision = z.object({ approved: z.boolean(), reason: z.string().min(1).max(16000),
   nextSteps: z.array(z.string().max(2000)).max(20) }).strict();
 export type StepState = {
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'BLOCKED' | 'INTERRUPTED';
-  aiCalls: number; updatedAt: string; reason?: string; nextSteps?: string[];
+  aiCalls: number; recoveryAttempts?: number; updatedAt: string; reason?: string; nextSteps?: string[];
   continuation?: ContinuationContract;
 };
 export type StoredPlan = { definition: ExecutionPlan; steps: Record<string, StepState> };

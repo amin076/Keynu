@@ -185,6 +185,65 @@ try {
   assert.ok(deterministicFailureEscalation.budget.estimatedCharacters <= 6000);
   assert.ok(deterministicFailureEscalation.relevantEvidence.some(item => item.kind === 'function-result'));
 
+  // Opt-in recovery gets only the escalation packet, executes a bounded repair, and verifies it.
+  let recoverableHealthy = false;
+  registry.register('test.repair', { description: 'Repair fixture', parameters: z.object({}).strict(), execute: async () => {
+    recoverableHealthy = true;
+    return { ok: true, summary: 'fixture repaired' };
+  } });
+  registry.register('test.recoverable', { description: 'Recoverable check', parameters: z.object({}).strict(), execute: async () =>
+    recoverableHealthy ? { ok: true, summary: 'healthy' } : { ok: false, summary: 'needs repair' } });
+  let repairContexts: unknown[] = [];
+  const recoveryAgent: ExecutionAgent = {
+    decide: async () => ({ kind: 'finish', summary: 'No initial action required', nextSteps: [] }),
+    review: async () => ({ approved: true, reason: 'verified', nextSteps: [] }),
+    repair: async context => {
+      repairContexts.push(context);
+      return { kind: 'repair', calls: [{ name: 'test.repair', args: {} }], rationale: 'Observed recoverable fixture failure.' };
+    },
+  };
+  await store.add({ id: 'auto-recovery', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Recover a bounded failure',
+    steps: [{
+      ...step,
+      executionMode: 'deterministic',
+      deterministicActions: [],
+      allowedFunctions: ['test.recoverable', 'test.repair'],
+      verification: [{ name: 'test.recoverable', args: {} }],
+      recovery: { enabled: true, maxAttempts: 1 },
+    }] });
+  await new MissionExecutionRunner(store, registry, recoveryAgent).run();
+  const recovered = (await store.read()).plans['auto-recovery']?.steps.audit;
+  const recoveryMetrics = await store.metrics('auto-recovery');
+  assert.equal(recovered?.status, 'COMPLETED');
+  assert.equal(recovered?.recoveryAttempts, 1);
+  assert.equal(recovered?.aiCalls, 1, 'only the targeted repair reasoning call is reserved');
+  assert.equal(recoveryMetrics.successfulRecoveries, 1);
+  assert.equal(repairContexts.length, 1);
+  assert.equal((repairContexts[0] as { purpose?: string }).purpose, 'FAILURE_ESCALATION');
+  assert.ok(JSON.stringify(repairContexts[0]).length <= 6000);
+
+  // Repair budgets are persistent and unsafe repair functions fail closed.
+  recoverableHealthy = false;
+  const unsafeRecovery: ExecutionAgent = {
+    ...recoveryAgent,
+    repair: async () => ({ kind: 'repair', calls: [{ name: 'project.write', args: {} }], rationale: 'not allowlisted' }),
+  };
+  await store.add({ id: 'unsafe-recovery', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Reject unsafe recovery',
+    steps: [{
+      ...step,
+      executionMode: 'deterministic',
+      deterministicActions: [],
+      allowedFunctions: ['test.recoverable'],
+      verification: [{ name: 'test.recoverable', args: {} }],
+      recovery: { enabled: true, maxAttempts: 1 },
+    }] });
+  await new MissionExecutionRunner(store, registry, unsafeRecovery).run();
+  const unsafeState = (await store.read()).plans['unsafe-recovery']?.steps.audit;
+  assert.equal(unsafeState?.status, 'BLOCKED');
+  assert.equal(unsafeState?.recoveryAttempts, 1);
+  assert.equal(unsafeState?.aiCalls, 1);
+  assert.ok((await store.history('unsafe-recovery')).some(item => item.kind === 'recovery-failed'));
+
   // Corruption must never reset state or budgets.
   await writeFile(store.file, '{invalid'); await assert.rejects(store.read());
   console.log('Mission execution: concurrency, dependencies, restart, budgets, verification, schemas and script arguments passed.');
