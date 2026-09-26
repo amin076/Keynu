@@ -9,6 +9,8 @@ export const ExecutionPlan = z.object({
   steps: z.array(z.object({
     id, goal: z.string().min(1).max(16000), dependsOn: z.array(id).default([]),
     allowedFunctions: z.array(z.string().min(1)).min(1),
+    executionMode: z.enum(['reasoning', 'deterministic']).default('reasoning'),
+    deterministicActions: z.array(FunctionCall).max(50).default([]),
     verification: z.array(FunctionCall).min(1),
     maxAiCalls: z.number().int().min(2).max(100).default(12),
   }).strict()).min(1).max(200),
@@ -26,6 +28,12 @@ export const ExecutionPlan = z.object({
     visiting.delete(stepId); visited.add(stepId);
     for (const check of step.verification) if (!step.allowedFunctions.includes(check.name)) {
       ctx.addIssue({ code: 'custom', message: `Verification function not allowed: ${check.name}` });
+    }
+    for (const action of step.deterministicActions) if (!step.allowedFunctions.includes(action.name)) {
+      ctx.addIssue({ code: 'custom', message: `Deterministic function not allowed: ${action.name}` });
+    }
+    if (step.executionMode === 'reasoning' && step.deterministicActions.length > 0) {
+      ctx.addIssue({ code: 'custom', message: 'deterministicActions require executionMode deterministic.' });
     }
   };
   for (const step of plan.steps) visit(step.id);
