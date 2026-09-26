@@ -6,6 +6,7 @@ import {
   type AppConnectorManifest,
   type AppManifest,
 } from "./IntegrationTypes.js";
+import { validateMcpConnectorConfig } from "./connectors/McpConnector.js";
 
 const APP_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -43,6 +44,11 @@ function validateConnector(value: unknown, appId: string): AppConnectorManifest 
   }
   if (record.config !== undefined && (!record.config || typeof record.config !== "object" || Array.isArray(record.config))) {
     throw new Error(`App '${appId}' connector '${id}' config must be an object.`);
+  }
+  // Kind-specific deep validation — fail early so manifests don't load with
+  // invalid config that would only surface as a confusing runtime error.
+  if (kind === "mcp") {
+    validateMcpConnectorConfig(record.config, id);
   }
   return {
     id,
