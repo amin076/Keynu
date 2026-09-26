@@ -5,7 +5,7 @@ import { MemoryLoader } from '../MemoryLoader.js';
 import type { FunctionRegistry } from '../../engineering/functions/FunctionRegistry.js';
 import type { ExecutionAgent } from './ApiExecutionAgent.js';
 import { ExecutionPlanStore } from './ExecutionPlanStore.js';
-import { AgentDecision, ReviewDecision, type ExecutionPlan, type ExecutionStep } from './ExecutionPlan.js';
+import { AgentDecision, RepairDecision, ReviewDecision, type ExecutionPlan, type ExecutionStep } from './ExecutionPlan.js';
 import { EscalationController } from './EscalationController.js';
 
 export class MissionExecutionRunner {
@@ -185,9 +185,61 @@ export class MissionExecutionRunner {
           history,
         });
         await this.store.evidence(plan.id, step.id, 'escalation-ready', escalation);
+
+        // Recovery is opt-in, bounded persistently, and receives only the compact
+        // escalation packet. It never resets the normal AI-call budget.
+        if (step.recovery.enabled && this.agent.repair) {
+          try {
+            await this.store.reserveRecovery(plan.id, step.id, step.recovery.maxAttempts);
+            await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
+            const repair = RepairDecision.parse(await this.agent.repair(escalation));
+            await this.store.evidence(plan.id, step.id, 'repair-decision', repair);
+            if (repair.kind === 'repair') {
+              for (const call of repair.calls) {
+                if (!step.allowedFunctions.includes(call.name)) throw new Error(`Repair function not allowed: ${call.name}`);
+                await this.store.evidence(plan.id, step.id, 'repair-intent', call);
+                const result = await this.functions.invoke(call.name, call.args,
+                  { projectRoot: plan.projectRoot }, step.allowedFunctions);
+                await this.store.evidence(plan.id, step.id, 'repair-result', { call, result });
+                if (!result.ok) throw new Error(`Repair function failed: ${call.name}`);
+              }
+              for (const check of step.verification) {
+                const result = await this.functions.invoke(check.name, check.args,
+                  { projectRoot: plan.projectRoot }, step.allowedFunctions);
+                await this.store.evidence(plan.id, step.id, 'recovery-verification', { check, result });
+                if (!result.ok) throw new Error(`Recovery verification failed: ${check.name}`);
+              }
+              await this.store.evidence(plan.id, step.id, 'recovery-succeeded', {
+                rationale: repair.rationale, repairActions: repair.calls.length,
+              });
+              const data = await this.store.read();
+              const complete = Object.entries(data.plans[plan.id]!.steps)
+                .every(([id, state]) => id === step.id || state.status === 'COMPLETED');
+              await this.store.update(plan.id, step.id, {
+                status: 'COMPLETED',
+                reason: `Recovered from failure: ${repair.rationale}`,
+                nextSteps: [],
+                continuation: {
+                  decision: complete ? 'COMPLETED' : 'LOCAL_CONTINUE',
+                  owner: complete ? 'none' : 'mission_engine',
+                  missionComplete: complete,
+                  reason: 'Targeted repair passed deterministic verification.',
+                  nextAction: complete ? 'Mission plan complete.' : 'Select the next dependency-ready step.',
+                },
+              });
+              return;
+            }
+            await this.store.evidence(plan.id, step.id, 'recovery-stopped', { reason: repair.reason });
+          } catch (recoveryError) {
+            await this.store.evidence(plan.id, step.id, 'recovery-failed', {
+              reason: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+            });
+          }
+        }
+
         await this.store.update(plan.id, step.id, { status: 'BLOCKED', reason,
           continuation: { decision: 'BLOCKED', owner: 'user', missionComplete: false,
-            reason, nextAction: 'Use the bounded escalation packet for targeted diagnosis before explicit resume.', retryable: false } });
+            reason, nextAction: 'Inspect the bounded escalation/recovery evidence before explicit resume.', retryable: false } });
       }
     });
   }
