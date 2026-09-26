@@ -85,6 +85,8 @@ export class ExecutionPlanStore {
     actionsPerAiCall: number;
     aiBypassedSteps: number;
     reasoningRequiredSteps: number;
+    escalationPackets: number;
+    escalationCharacters: number;
   }> {
     const data = await this.read();
     const plan = data.plans[planId];
@@ -99,6 +101,9 @@ export class ExecutionPlanStore {
     const gates = history.filter(item => item.kind === 'reasoning-gate');
     const aiBypassedSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'BYPASS_AI').length;
     const reasoningRequiredSteps = gates.filter(item => (item.data as { decision?: string })?.decision === 'REQUIRE_AI').length;
+    const escalations = history.filter(item => item.kind === 'escalation-ready');
+    const escalationCharacters = escalations.reduce((sum, item) =>
+      sum + Number((item.data as { budget?: { estimatedCharacters?: number } })?.budget?.estimatedCharacters ?? 0), 0);
     return {
       planId,
       aiCalls,
@@ -109,7 +114,15 @@ export class ExecutionPlanStore {
       actionsPerAiCall: aiCalls === 0 ? 0 : Number((totalActions / aiCalls).toFixed(2)),
       aiBypassedSteps,
       reasoningRequiredSteps,
+      escalationPackets: escalations.length,
+      escalationCharacters,
     };
+  }
+
+  async latestEscalation(planId: string, stepId: string): Promise<unknown | null> {
+    const history = await this.history(planId);
+    const match = history.filter(item => item.stepId === stepId && item.kind === 'escalation-ready').at(-1);
+    return match?.data ?? null;
   }
 
   async history(planId: string): Promise<Evidence[]> {
