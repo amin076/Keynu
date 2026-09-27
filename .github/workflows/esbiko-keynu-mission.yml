@@ -1,0 +1,137 @@
+name: Esbiko Keynu mission
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "prepare verifies the workspace only; run executes AI reasoning"
+        required: true
+        default: prepare
+        type: choice
+        options:
+          - prepare
+          - run
+      base_branch:
+        description: "Esbiko base branch"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esbiko-keynu-mission-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ESBIKO_REPOSITORY: amin076/science-web-lab
+      MISSION_BRANCH: keynu/esbiko-improvement-${{ github.run_id }}
+      WORKSPACE_ROOT: ${{ github.workspace }}/.keynu/workspaces
+      PREPARED_ROOT: ${{ github.workspace }}/.keynu/prepared-plans
+      OPENAI_API_KEY: ${{ inputs.mode == 'run' && secrets.OPENAI_API_KEY || '' }}
+      OPENAI_MODEL: ${{ vars.KEYNU_MISSION_MODEL }}
+    steps:
+      - name: Check out Keynu
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and build Keynu
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare isolated Esbiko mission workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run github-mission -- \
+            "$ESBIKO_REPOSITORY" \
+            "${{ inputs.base_branch }}" \
+            "$MISSION_BRANCH" \
+            "$WORKSPACE_ROOT" \
+            examples/esbiko/esbiko-real-improvement.plan.json \
+            "$PREPARED_ROOT" | tee github-mission-preparation.json
+
+      - name: Locate prepared plan and Esbiko workspace
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLAN="$PREPARED_ROOT/esbiko-real-improvement-001.prepared.json"
+          test -f "$PLAN"
+          ROOT="$(node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(p.projectRoot)" "$PLAN")"
+          test -d "$ROOT/.git"
+          echo "plan=$PLAN" >> "$GITHUB_OUTPUT"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Install Esbiko dependencies
+        working-directory: ${{ steps.paths.outputs.root }}
+        run: npm ci
+
+      - name: Establish Esbiko verification baseline
+        working-directory: ${{ steps.paths.outputs.root }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-build.log"
+          npm run sim:check 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-sim.log"
+          npm run test:platform-api 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-platform.log"
+          npm run test:webmcp 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-webmcp.log"
+
+      - name: Add prepared mission
+        run: npm run mission -- add examples/esbiko/config.json "${{ steps.paths.outputs.plan }}"
+
+      - name: Require provider secret for reasoning mode
+        if: inputs.mode == 'run'
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY repository secret is required for mode=run."
+            exit 1
+          fi
+
+      - name: Execute Keynu mission
+        if: inputs.mode == 'run'
+        run: npm run mission -- run examples/esbiko/config.json
+
+      - name: Generate mission report
+        if: inputs.mode == 'run'
+        run: |
+          npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 | tee mission-impact-report.md
+          npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 --json > mission-impact-report.json
+
+      - name: Inspect resulting workspace
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${{ steps.paths.outputs.root }}" ] && [ -d "${{ steps.paths.outputs.root }}/.git" ]; then
+            npm run github-workspace -- inspect "${{ steps.paths.outputs.root }}" | tee workspace-inspection.json
+            git -C "${{ steps.paths.outputs.root }}" diff --binary > esbiko-mission.patch
+          fi
+
+      - name: Upload mission evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esbiko-keynu-mission-${{ github.run_id }}
+          path: |
+            github-mission-preparation.json
+            workspace-inspection.json
+            esbiko-mission.patch
+            mission-impact-report.md
+            mission-impact-report.json
+            esbiko-baseline-*.log
+            .keynu/esbiko-execution/
+            .keynu/prepared-plans/
+          if-no-files-found: ignore
+          retention-days: 14
