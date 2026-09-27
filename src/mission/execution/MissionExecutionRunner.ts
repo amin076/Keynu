@@ -74,7 +74,21 @@ export class MissionExecutionRunner {
       const text = JSON.stringify(value);
       return text.length <= limit ? value : { excerpt: text.slice(0, limit), truncated: true };
     };
+    const state = database.plans[plan.id]?.steps[step.id];
+    const aiCallsUsed = state?.aiCalls ?? 0;
+    const aiCallsRemaining = Math.max(0, step.maxAiCalls - aiCallsUsed);
+    const reviewCallsReserved = 1;
+    const convergenceRequired = aiCallsRemaining <= 3;
     const context = { goal: plan.goal, rules: plan.rules.slice(0, 8), step,
+      progress: {
+        aiCallsUsed,
+        aiCallsRemaining,
+        reviewCallsReserved,
+        convergenceRequired,
+        instruction: convergenceRequired
+          ? 'CONVERGE NOW. Do not spend another call only exploring. Use current evidence to make the smallest justified write, or finish if the goal is already satisfied. Preserve one AI call for independent review.'
+          : 'Gather only the minimum evidence needed for one bounded change; avoid broad exploration and repeated reads.',
+      },
       functions: this.functions.describe(step.allowedFunctions),
       memory: bounded(memory, 5000), priorPlans: bounded(priorPlans, 3000), history: bounded(history.reverse(), 8000) };
     return bounded(context, 20000);
@@ -139,6 +153,14 @@ export class MissionExecutionRunner {
         while (true) {
           if (signal?.aborted) { failurePhase = 'interrupt'; throw new Error('Worker stopped before next action.'); }
           failurePhase = 'budget';
+          const beforeDecision = await this.store.read();
+          const callsUsed = beforeDecision.plans[plan.id]?.steps[step.id]?.aiCalls ?? 0;
+          // Keep one call in reserve for the mandatory independent review. Without
+          // this guard an exploratory agent can consume the entire budget and make
+          // successful completion impossible even after it decides to finish.
+          if (callsUsed >= step.maxAiCalls - 1) {
+            throw new Error('Reasoning budget exhausted before completion; one AI call is reserved for independent review.');
+          }
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
           failurePhase = 'action';
           const decision = AgentDecision.parse(await this.agent.decide(await this.context(plan, step)));
