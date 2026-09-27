@@ -134,6 +134,21 @@ try {
   assert.equal(amplifiedMetrics.actionsPerAiCall, 1);
   assert.equal((await store.read()).plans.amplified?.steps.audit?.status, 'COMPLETED');
 
+  // Controller must stop an agent that keeps exploring without implementation progress.
+  await store.add({ id: 'stagnant-reasoning', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Do not loop forever',
+    steps: [{ ...step, allowedFunctions: ['project.list'], verification: [{ name: 'project.list', args: {} }], maxAiCalls: 8 }] });
+  let stagnantDecisions = 0;
+  const stagnantAgent: ExecutionAgent = {
+    decide: async () => { stagnantDecisions++; return { kind: 'call', name: 'project.list', args: {} }; },
+    review: async () => ({ approved: true, reason: 'unused', nextSteps: [] }),
+  };
+  await new MissionExecutionRunner(store, registry, stagnantAgent).run();
+  const stagnantState = (await store.read()).plans['stagnant-reasoning']?.steps.audit;
+  assert.equal(stagnantState?.status, 'BLOCKED');
+  assert.equal(stagnantState?.aiCalls, 3, 'controller must stop after three non-mutating reasoning rounds');
+  assert.equal(stagnantDecisions, 3);
+  assert.match(stagnantState?.reason ?? '', /no implementation progress/);
+
   // Reasoning gate must spend zero AI calls for explicitly deterministic work.
   let forbiddenAiCalls = 0;
   const noAiAgent: ExecutionAgent = {
