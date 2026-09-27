@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, resolve, join } from "node:path";
+import { resolve, join } from "node:path";
 import { z } from "zod";
 import { ExecutionPlan } from "../mission/execution/ExecutionPlan.js";
 import { GitHubMissionWorkspaceManager } from "./GitHubMissionWorkspaceManager.js";
