@@ -24,7 +24,8 @@
     "test:browser-reminder": "npm run build && node dist/browser/tests/BrowserAgentReminderIntegration.test.js",
     "mission": "node dist/mission/execution/cli.js",
     "reasoning:brief": "node dist/mission/reasoningBriefCli.js",
-    "github-workspace": "node dist/workspace/githubMissionWorkspaceCli.js"
+    "github-workspace": "node dist/workspace/githubMissionWorkspaceCli.js",
+    "github-mission": "node dist/workspace/githubMissionCli.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
