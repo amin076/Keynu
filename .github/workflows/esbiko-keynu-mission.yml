@@ -75,6 +75,11 @@ jobs:
           npm run sim:check 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-sim.log"
           npm run test:platform-api 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-platform.log"
           npm run test:webmcp 2>&1 | tee "$GITHUB_WORKSPACE/esbiko-baseline-webmcp.log"
+          # Baseline verification may regenerate tracked catalog data. The mission
+          # must start from the pinned clean tree so generated baseline output is
+          # never mistaken for an AI-authored change.
+          git restore --worktree --staged -- functions/api/data/platformCatalog.generated.json
+          test -z "$(git status --short)" || { echo "::error::Baseline left a dirty workspace."; git status --short; exit 1; }
 
       - name: Add prepared mission
         run: npm run mission -- add examples/esbiko/config.json "${{ steps.paths.outputs.plan }}"
@@ -94,9 +99,22 @@ jobs:
 
       - name: Generate mission report
         if: success()
+        shell: bash
         run: |
+          set -euo pipefail
           npm run mission -- report examples/esbiko/config.json esbiko-solar-system-small-fix-001 | tee mission-impact-report.md
           npm run mission -- report examples/esbiko/config.json esbiko-solar-system-small-fix-001 --json > mission-impact-report.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('mission-impact-report.json', 'utf8');
+          const start = text.indexOf('{');
+          if (start < 0) throw new Error('Mission report JSON not found.');
+          const report = JSON.parse(text.slice(start));
+          if (report.mission.finalStatus !== 'COMPLETED') {
+            console.error('::error::Keynu mission did not complete: ' + report.mission.finalStatus);
+            process.exit(1);
+          }
+          NODE
 
       - name: Inspect resulting workspace
         if: always()
