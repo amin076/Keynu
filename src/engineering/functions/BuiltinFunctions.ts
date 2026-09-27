@@ -10,15 +10,31 @@ export function createBuiltinFunctions(): FunctionRegistry {
   registry.register('project.list', {
     description: 'List one project directory (no protected runtime or Git internals).',
     parameters: z.object({ path: z.string().default('.') }).strict(),
-    execute: async ({ path }, { projectRoot }) => ({ ok: true, summary: 'Directory listed.',
-      data: (await readdir(await projectPath(projectRoot, path))).slice(0, 1000) }),
+    execute: async ({ path }, { projectRoot }) => {
+      const target = await projectPath(projectRoot, path);
+      try {
+        return { ok: true, summary: 'Directory listed.', data: (await readdir(target)).slice(0, 1000) };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return { ok: false, summary: `Directory not found: ${path}`, data: { code: 'ENOENT', path } };
+        }
+        throw error;
+      }
+    },
   });
   registry.register('project.read', {
     description: 'Read a UTF-8 source file up to 128 KiB; returns SHA256 for guarded edits.',
     parameters: z.object({ path: z.string().min(1) }).strict(),
     execute: async ({ path }, { projectRoot }) => {
       const file = await projectPath(projectRoot, path);
-      if ((await stat(file)).size > 131072) throw new Error('File exceeds read limit.');
+      try {
+        if ((await stat(file)).size > 131072) throw new Error('File exceeds read limit.');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return { ok: false, summary: `File not found: ${path}`, data: { code: 'ENOENT', path } };
+        }
+        throw error;
+      }
       const content = await readFile(file, 'utf8');
       return { ok: true, summary: `Read ${path}`, data: { content, sha256: createHash('sha256').update(content).digest('hex') } };
     },
