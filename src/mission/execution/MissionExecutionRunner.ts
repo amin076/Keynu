@@ -150,6 +150,8 @@ export class MissionExecutionRunner {
           decision: 'REQUIRE_AI',
           reason: 'Step is marked reasoning and requires an agent decision.',
         });
+        let stagnantRounds = 0;
+        let lastProgressSignature = '';
         while (true) {
           if (signal?.aborted) { failurePhase = 'interrupt'; throw new Error('Worker stopped before next action.'); }
           failurePhase = 'budget';
@@ -167,8 +169,19 @@ export class MissionExecutionRunner {
           await this.store.evidence(plan.id, step.id, 'decision', decision);
           if (decision.kind === 'call' || decision.kind === 'batch') {
             const calls = decision.kind === 'batch' ? decision.calls : [decision];
+            const mutating = calls.some(call => call.name === 'project.write');
+            const signature = JSON.stringify(calls.map(call => ({ name: call.name, args: call.args })));
+            stagnantRounds = mutating ? 0 : (signature === lastProgressSignature ? stagnantRounds + 1 : stagnantRounds + 1);
+            lastProgressSignature = signature;
+            // Exploration is useful only briefly. Once the agent has spent three
+            // consecutive reasoning rounds without a write/finish, stop the loop
+            // before it burns the review reserve. This is a controller invariant,
+            // not a prompt suggestion.
+            if (!mutating && stagnantRounds >= 3) {
+              throw new Error('Mission made no implementation progress after three reasoning rounds; controller stopped exploratory looping.');
+            }
             await this.store.evidence(plan.id, step.id, 'execution-batch', {
-              reasoningCall: true, actionCount: calls.length,
+              reasoningCall: true, actionCount: calls.length, mutating, stagnantRounds,
             });
             for (const call of calls) {
               // Each intent is persisted before a possibly non-idempotent operation.
