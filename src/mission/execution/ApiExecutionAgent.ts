@@ -23,7 +23,38 @@ export class ApiExecutionAgent implements ExecutionAgent {
     }
     const text = result.content ?? '';
     if (text.length > 65536) throw new Error('AI decision exceeds limit.');
-    return JSON.parse(text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
+    return this.parseJsonDecision(text);
+  }
+
+  private parseJsonDecision(text: string): unknown {
+    const cleaned = text.trim().replace(/^\`\`\`(?:json)?\\s*/i, '').replace(/\\s*\`\`\`$/, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch (initialError) {
+      // Some models can append prose even when explicitly instructed to return JSON.
+      // Extract exactly one balanced top-level JSON object, respecting quoted braces.
+      const start = cleaned.indexOf('{');
+      if (start < 0) throw initialError;
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let i = start; i < cleaned.length; i += 1) {
+        const ch = cleaned[i]!;
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (ch === '\\\\') escaped = true;
+          else if (ch === '"') inString = false;
+          continue;
+        }
+        if (ch === '"') { inString = true; continue; }
+        if (ch === '{') depth += 1;
+        else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) return JSON.parse(cleaned.slice(start, i + 1));
+        }
+      }
+      throw initialError;
+    }
   }
   async decide(context: unknown) {
     return AgentDecision.parse(await this.request(this.worker,
