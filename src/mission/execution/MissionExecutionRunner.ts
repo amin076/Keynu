@@ -80,6 +80,7 @@ export class MissionExecutionRunner {
     return bounded(context, 20000);
   }
   private async execute(plan: ExecutionPlan, step: ExecutionStep, signal?: AbortSignal): Promise<void> {
+    let failurePhase: 'action' | 'verification' | 'review' | 'budget' | 'interrupt' = 'action';
     await withFileLock(join(plan.projectRoot, '.keynu', 'state', 'mission-execution'), async () => {
       await this.store.update(plan.id, step.id, { status: 'RUNNING', reason: 'Executing approved step.',
         continuation: { decision: 'LOCAL_CONTINUE', owner: 'mission_engine', missionComplete: false,
@@ -97,7 +98,8 @@ export class MissionExecutionRunner {
             actionCount: step.deterministicActions.length,
           });
           for (const action of step.deterministicActions) {
-            if (signal?.aborted) throw new Error('Worker stopped before next deterministic action.');
+            failurePhase = 'action';
+            if (signal?.aborted) { failurePhase = 'interrupt'; throw new Error('Worker stopped before next deterministic action.'); }
             await this.store.evidence(plan.id, step.id, 'function-intent', action);
             const result = await this.functions.invoke(action.name, action.args,
               { projectRoot: plan.projectRoot }, step.allowedFunctions);
@@ -105,6 +107,7 @@ export class MissionExecutionRunner {
             if (!result.ok) throw new Error(`Function failed: ${action.name}`);
           }
           for (const check of step.verification) {
+            failurePhase = 'verification';
             await this.store.evidence(plan.id, step.id, 'verification-intent', check);
             const result = await this.functions.invoke(check.name, check.args,
               { projectRoot: plan.projectRoot }, step.allowedFunctions);
@@ -134,8 +137,10 @@ export class MissionExecutionRunner {
           reason: 'Step is marked reasoning and requires an agent decision.',
         });
         while (true) {
-          if (signal?.aborted) throw new Error('Worker stopped before next action.');
+          if (signal?.aborted) { failurePhase = 'interrupt'; throw new Error('Worker stopped before next action.'); }
+          failurePhase = 'budget';
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
+          failurePhase = 'action';
           const decision = AgentDecision.parse(await this.agent.decide(await this.context(plan, step)));
           await this.store.evidence(plan.id, step.id, 'decision', decision);
           if (decision.kind === 'call' || decision.kind === 'batch') {
@@ -154,13 +159,16 @@ export class MissionExecutionRunner {
             continue;
           }
           for (const check of step.verification) {
+            failurePhase = 'verification';
             await this.store.evidence(plan.id, step.id, 'verification-intent', check);
             const result = await this.functions.invoke(check.name, check.args,
               { projectRoot: plan.projectRoot }, step.allowedFunctions);
             await this.store.evidence(plan.id, step.id, 'verification', { check, result });
             if (!result.ok) throw new Error(`Verification failed: ${check.name}`);
           }
+          failurePhase = 'budget';
           await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);
+          failurePhase = 'review';
           const review = ReviewDecision.parse(await this.agent.review({ context: await this.context(plan, step), completion: decision }));
           await this.store.evidence(plan.id, step.id, 'review', review);
           if (!review.approved) throw new Error(`Review rejected: ${review.reason}`);
@@ -174,13 +182,13 @@ export class MissionExecutionRunner {
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        await this.store.evidence(plan.id, step.id, 'blocked', { reason });
+        await this.store.evidence(plan.id, step.id, 'blocked', { reason, failurePhase });
         const history = await this.store.history(plan.id);
         const escalation = new EscalationController().build({
           planId: plan.id,
           stepId: step.id,
           goal: step.goal,
-          failure: reason,
+          failure: `[${failurePhase}] ${reason}`,
           allowedFunctions: step.allowedFunctions,
           history,
         });
@@ -188,7 +196,10 @@ export class MissionExecutionRunner {
 
         // Recovery is opt-in, bounded persistently, and receives only the compact
         // escalation packet. It never resets the normal AI-call budget.
-        if (step.recovery.enabled && this.agent.repair) {
+        // V1 recovery is intentionally limited to verification failures. Action,
+        // review, budget and interrupt failures can have unknown side effects or
+        // require operator reconciliation, so they fail closed.
+        if (failurePhase === 'verification' && step.recovery.enabled && this.agent.repair) {
           try {
             await this.store.reserveRecovery(plan.id, step.id, step.recovery.maxAttempts);
             await this.store.reserveCall(plan.id, step.id, step.maxAiCalls);

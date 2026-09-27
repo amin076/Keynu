@@ -186,6 +186,36 @@ try {
   assert.ok(deterministicFailureEscalation.budget.estimatedCharacters <= 6000);
   assert.ok(deterministicFailureEscalation.relevantEvidence.some(item => item.kind === 'function-result'));
 
+  // Action failures must fail closed even when recovery is enabled: an action
+  // may have partially applied side effects, so automatic repair is unsafe.
+  let unsafeActionRepairCalls = 0;
+  const actionFailureRecoveryAgent: ExecutionAgent = {
+    decide: async () => ({ kind: 'finish', summary: 'unused', nextSteps: [] }),
+    review: async () => ({ approved: true, reason: 'unused', nextSteps: [] }),
+    repair: async () => {
+      unsafeActionRepairCalls++;
+      return { kind: 'stop', reason: 'must not be called for action failure' };
+    },
+  };
+  await store.add({ id: 'action-failure-no-recovery', projectId: 'project-0', projectRoot: join(root, 'project-0'), goal: 'Fail closed after action failure',
+    steps: [{
+      ...step,
+      executionMode: 'deterministic',
+      deterministicActions: [{ name: 'test.fail', args: {} }],
+      allowedFunctions: ['test.fail'],
+      verification: [{ name: 'test.fail', args: {} }],
+      recovery: { enabled: true, maxAttempts: 1 },
+    }] });
+  await new MissionExecutionRunner(store, registry, actionFailureRecoveryAgent).run();
+  const actionFailureState = (await store.read()).plans['action-failure-no-recovery']?.steps.audit;
+  assert.equal(actionFailureState?.status, 'BLOCKED');
+  assert.equal(actionFailureState?.aiCalls, 0);
+  assert.equal(actionFailureState?.recoveryAttempts ?? 0, 0);
+  assert.equal(unsafeActionRepairCalls, 0);
+  const actionFailureHistory = await store.history('action-failure-no-recovery');
+  assert.ok(actionFailureHistory.some(item => item.kind === 'blocked' &&
+    (item.data as { failurePhase?: string }).failurePhase === 'action'));
+
   // Opt-in recovery gets only the escalation packet, executes a bounded repair, and verifies it.
   let recoverableHealthy = false;
   registry.register('test.repair', { description: 'Repair fixture', parameters: z.object({}).strict(), execute: async () => {
