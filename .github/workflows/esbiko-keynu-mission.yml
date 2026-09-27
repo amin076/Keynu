@@ -95,8 +95,8 @@ jobs:
       - name: Generate mission report
         if: success()
         run: |
-          npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 | tee mission-impact-report.md
-          npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 --json > mission-impact-report.json
+          npm run mission -- report examples/esbiko/config.json esbiko-solar-system-small-fix-001 | tee mission-impact-report.md
+          npm run mission -- report examples/esbiko/config.json esbiko-solar-system-small-fix-001 --json > mission-impact-report.json
 
       - name: Inspect resulting workspace
         if: always()
