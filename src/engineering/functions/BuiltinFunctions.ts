@@ -28,7 +28,10 @@ export function createBuiltinFunctions(): FunctionRegistry {
     execute: async ({ path }, { projectRoot }) => {
       const file = await projectPath(projectRoot, path);
       try {
-        if ((await stat(file)).size > 131072) throw new Error('File exceeds read limit.');
+        const size = (await stat(file)).size;
+        if (size > 131072) {
+          return { ok: false, summary: `File exceeds read limit: ${path}`, data: { code: 'FILE_TOO_LARGE', path, size, limit: 131072 } };
+        }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           return { ok: false, summary: `File not found: ${path}`, data: { code: 'ENOENT', path } };
