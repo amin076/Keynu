@@ -22,7 +22,7 @@ jobs:
       WORKSPACE_ROOT: ${{ github.workspace }}/.keynu/workspaces
       PREPARED_ROOT: ${{ github.workspace }}/.keynu/prepared-plans
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: ${{ vars.KEYNU_MISSION_MODEL }}
+      OPENAI_MODEL: ${{ vars.KEYNU_MISSION_MODEL || 'gpt-5.6-luna' }}
     steps:
       - name: Check out Keynu
         uses: actions/checkout@v4
