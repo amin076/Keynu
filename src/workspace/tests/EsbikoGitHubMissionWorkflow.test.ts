@@ -1,0 +1,20 @@
+import { strict as assert } from "node:assert";
+import { readFile } from "node:fs/promises";
+
+const workflow = await readFile(".github/workflows/esbiko-keynu-mission.yml", "utf8");
+assert.match(workflow, /workflow_dispatch:/);
+assert.match(workflow, /permissions:\n  contents: read/);
+assert.match(workflow, /default: prepare/);
+assert.match(workflow, /npm run github-mission/);
+assert.match(workflow, /npm run build 2>&1/);
+assert.match(workflow, /npm run sim:check/);
+assert.match(workflow, /npm run test:platform-api/);
+assert.match(workflow, /npm run test:webmcp/);
+assert.match(workflow, /OPENAI_API_KEY.*secrets\.OPENAI_API_KEY/);
+assert.match(workflow, /if: inputs\.mode == 'run'/);
+assert.match(workflow, /esbiko-mission\.patch/);
+assert.match(workflow, /mission-impact-report\.md/);
+assert.doesNotMatch(workflow, /git\s+push/);
+assert.doesNotMatch(workflow, /gh\s+pr\s+create/);
+assert.doesNotMatch(workflow, /contents:\s*write/);
+console.log("Esbiko GitHub mission workflow contract passed.");
