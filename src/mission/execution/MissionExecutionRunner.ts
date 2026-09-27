@@ -154,7 +154,15 @@ export class MissionExecutionRunner {
               const result = await this.functions.invoke(call.name, call.args,
                 { projectRoot: plan.projectRoot }, step.allowedFunctions);
               await this.store.evidence(plan.id, step.id, 'function-result', { call, result });
-              if (!result.ok) throw new Error(`Function failed: ${call.name}`);
+              if (!result.ok) {
+                // A bounded read/list miss is an observation the reasoning agent can
+                // adapt to, not a runtime failure. Mutating/unknown failures still fail closed.
+                const data = result.data as { code?: string } | undefined;
+                if (call.name === 'project.list' || call.name === 'project.read') {
+                  if (data?.code === 'ENOENT' || data?.code === 'FILE_TOO_LARGE') continue;
+                }
+                throw new Error(`Function failed: ${call.name}`);
+              }
             }
             continue;
           }
