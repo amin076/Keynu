@@ -1,21 +1,9 @@
 name: Esbiko Keynu mission
 
 on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "prepare verifies the workspace only; run executes AI reasoning"
-        required: true
-        default: prepare
-        type: choice
-        options:
-          - prepare
-          - run
-      base_branch:
-        description: "Esbiko base branch"
-        required: true
-        default: main
-        type: string
+  push:
+    branches:
+      - fix/structured-ai-json
 
 permissions:
   contents: read
@@ -33,8 +21,8 @@ jobs:
       MISSION_BRANCH: keynu/esbiko-improvement-${{ github.run_id }}
       WORKSPACE_ROOT: ${{ github.workspace }}/.keynu/workspaces
       PREPARED_ROOT: ${{ github.workspace }}/.keynu/prepared-plans
-      OPENAI_API_KEY: ${{ inputs.mode == 'run' && secrets.OPENAI_API_KEY || '' }}
-      OPENAI_MODEL: ${{ vars.KEYNU_MISSION_MODEL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.KEYNU_MISSION_MODEL || 'gpt-5.6-luna' }}
     steps:
       - name: Check out Keynu
         uses: actions/checkout@v4
@@ -56,7 +44,7 @@ jobs:
           set -euo pipefail
           npm run github-mission -- \
             "$ESBIKO_REPOSITORY" \
-            "${{ inputs.base_branch }}" \
+            "main" \
             "$MISSION_BRANCH" \
             "$WORKSPACE_ROOT" \
             examples/esbiko/esbiko-real-improvement.plan.json \
@@ -92,7 +80,7 @@ jobs:
         run: npm run mission -- add examples/esbiko/config.json "${{ steps.paths.outputs.plan }}"
 
       - name: Require provider secret for reasoning mode
-        if: inputs.mode == 'run'
+        if: success()
         shell: bash
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
@@ -101,11 +89,11 @@ jobs:
           fi
 
       - name: Execute Keynu mission
-        if: inputs.mode == 'run'
+        if: success()
         run: npm run mission -- run examples/esbiko/config.json
 
       - name: Generate mission report
-        if: inputs.mode == 'run'
+        if: success()
         run: |
           npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 | tee mission-impact-report.md
           npm run mission -- report examples/esbiko/config.json esbiko-real-improvement-001 --json > mission-impact-report.json
