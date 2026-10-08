@@ -25,7 +25,9 @@
     "mission": "node dist/mission/execution/cli.js",
     "reasoning:brief": "node dist/mission/reasoningBriefCli.js",
     "github-workspace": "node dist/workspace/githubMissionWorkspaceCli.js",
-    "github-mission": "node dist/workspace/githubMissionCli.js"
+    "github-mission": "node dist/workspace/githubMissionCli.js",
+    "esbiko:watch": "node scripts/esbiko-continuation-watch.mjs",
+    "test:esbiko-watch": "node --test scripts/tests/esbiko-continuation-watch.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
