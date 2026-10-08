@@ -1,0 +1,68 @@
+name: Esbiko continuation watch (zero OpenAI calls)
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: esbiko-zero-cost-watch
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run offline regression tests
+        run: node --test scripts/tests/esbiko-continuation-watch.test.mjs
+
+      - name: Read Esbiko tracker without invoking an AI model
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/esbiko-continuation-watch.mjs --output "$RUNNER_TEMP/esbiko-handoff.json"
+
+      - name: Publish or update one deduplicated Keynu handoff issue
+        if: github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ runner.temp }}/esbiko-handoff.json
+        with:
+          script: |
+            const fs = require('node:fs');
+            const status = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, 'utf8'));
+            const { owner, repo } = context.repo;
+            const title = 'Esbiko continuation queue';
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const prior = issues.find(issue => !issue.pull_request && issue.title === title);
+            if (!prior) {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body: status.issueBody,
+              });
+              core.info('Created Keynu handoff issue #' + created.data.number);
+            } else if (prior.body !== status.issueBody) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: prior.number, body: status.issueBody,
+              });
+              core.info('Updated handoff #' + prior.number);
+            } else {
+              core.info('No new pair or tracker change; no notification.');
+            }
+            await core.summary
+              .addHeading('Esbiko queue (browser WebMCP only)')
+              .addRaw('Browser-ready ' + status.browserReady + '/32; pending ' +
+                status.pending + '; next: ' + status.nextPair.join(' + '))
+              .write();
