@@ -1,6 +1,8 @@
 name: Esbiko continuation watch (zero OpenAI calls)
 
 on:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
@@ -32,6 +34,7 @@ jobs:
         run: node scripts/esbiko-continuation-watch.mjs --output "$RUNNER_TEMP/esbiko-handoff.json"
 
       - name: Publish or update one deduplicated Keynu handoff issue
+        if: github.event_name != 'pull_request'
         uses: actions/github-script@v7
         env:
           REPORT_PATH: ${{ runner.temp }}/esbiko-handoff.json
